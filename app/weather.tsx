@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SITES } from "../src/data/sites";
+import { useSiteContext } from "../src/context/SiteContext";
 import { fetchWeatherForSite } from "../src/services/weather";
 import { formatHour } from "../src/services/format";
 import { Site, WeatherBundle } from "../src/types";
@@ -48,19 +48,14 @@ function MiniCard({
 }
 
 export default function WeatherScreen() {
-  const [selectedSiteId, setSelectedSiteId] = useState<string>(SITES[0].id);
+  const { sites, selectedSiteId, selectedSite, setSelectedSiteId } = useSiteContext();
   const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const selectedSite = useMemo(
-    () => SITES.find((site) => site.id === selectedSiteId) ?? SITES[0],
-    [selectedSiteId]
-  );
-
   const loadAllWeather = async () => {
     const entries = await Promise.all(
-      SITES.map(async (site) => {
+      sites.map(async (site) => {
         const weather = await fetchWeatherForSite(site);
         return [site.id, weather] as const;
       })
@@ -79,7 +74,7 @@ export default function WeatherScreen() {
     };
 
     initialize();
-  }, []);
+  }, [sites]);
 
   const onRefresh = async () => {
     try {
@@ -113,7 +108,7 @@ export default function WeatherScreen() {
         </Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {SITES.map((site) => (
+          {sites.map((site) => (
             <TouchableOpacity
               key={site.id}
               style={[

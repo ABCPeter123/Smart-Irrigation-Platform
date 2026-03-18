@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SITES } from "../src/data/sites";
+import { useSiteContext } from "../src/context/SiteContext";
 import { buildRecommendation } from "../src/services/irrigation";
 import { fetchWeatherForSite } from "../src/services/weather";
 import { Recommendation, Site, WeatherBundle } from "../src/types";
@@ -59,10 +59,11 @@ export default function RecommendationsScreen() {
   const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { sites } = useSiteContext();
 
   const loadAllWeather = async () => {
     const entries = await Promise.all(
-      SITES.map(async (site) => {
+      sites.map(async (site) => {
         const weather = await fetchWeatherForSite(site);
         return [site.id, weather] as const;
       })
@@ -81,7 +82,7 @@ export default function RecommendationsScreen() {
     };
 
     initialize();
-  }, []);
+  }, [sites]);
 
   const onRefresh = async () => {
     try {
@@ -93,11 +94,13 @@ export default function RecommendationsScreen() {
   };
 
   const recommendations = useMemo(() => {
-    return SITES.filter((site) => weatherBySite[site.id]).map((site) => {
-      const recommendation = buildRecommendation(site, weatherBySite[site.id]);
-      return { site, recommendation };
-    });
-  }, [weatherBySite]);
+    return sites
+      .filter((site) => weatherBySite[site.id])
+      .map((site) => {
+        const recommendation = buildRecommendation(site, weatherBySite[site.id]);
+        return { site, recommendation };
+      });
+  }, [sites, weatherBySite]);
 
   const sortedRecommendations = useMemo(() => {
     const rank = { High: 3, Medium: 2, Low: 1 } as const;
@@ -126,6 +129,15 @@ export default function RecommendationsScreen() {
           Site-level irrigation actions generated from live weather, ET, crop profile,
           soil profile, and optional sensor calibration.
         </Text>
+
+        {sortedRecommendations.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>No recommendations available</Text>
+            <Text style={styles.cardSubtitle}>
+              Add or select a site to generate irrigation guidance.
+            </Text>
+          </View>
+        ) : null}
 
         {sortedRecommendations.map(({ site, recommendation }) => (
           <View key={site.id} style={styles.card}>

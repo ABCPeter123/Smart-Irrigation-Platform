@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SITES } from "../src/data/sites";
+import { useSiteContext } from "../src/context/SiteContext";
 import { buildRecommendation } from "../src/services/irrigation";
 import { fetchWeatherForSite } from "../src/services/weather";
 import { Recommendation, Site, WeatherBundle } from "../src/types";
@@ -103,19 +103,14 @@ function SectionTitle({
 }
 
 export default function DashboardScreen() {
-  const [selectedSiteId, setSelectedSiteId] = useState<string>(SITES[0].id);
+  const { sites, selectedSiteId, selectedSite, setSelectedSiteId } = useSiteContext();
   const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const selectedSite = useMemo(
-    () => SITES.find((site) => site.id === selectedSiteId) ?? SITES[0],
-    [selectedSiteId]
-  );
-
   const loadAllWeather = async () => {
     const entries = await Promise.all(
-      SITES.map(async (site) => {
+      sites.map(async (site) => {
         const weather = await fetchWeatherForSite(site);
         return [site.id, weather] as const;
       })
@@ -144,13 +139,13 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     initialize();
-  }, []);
+  }, [sites]);
 
   const recommendations = useMemo(() => {
-    return SITES.filter((site) => weatherBySite[site.id]).map((site) =>
-      buildRecommendation(site, weatherBySite[site.id])
-    );
-  }, [weatherBySite]);
+    return sites
+      .filter((site) => weatherBySite[site.id])
+      .map((site) => buildRecommendation(site, weatherBySite[site.id]));
+  }, [sites, weatherBySite]);
 
   const selectedWeather = weatherBySite[selectedSite.id];
   const selectedRecommendation =
@@ -180,7 +175,8 @@ export default function DashboardScreen() {
           <Text style={styles.heroEyebrow}>Northern Irrigation</Text>
           <Text style={styles.heroTitle}>Operational Dashboard</Text>
           <Text style={styles.heroSubtitle}>
-            Live weather, evapotranspiration-driven irrigation guidance, and site-level action planning.
+            Live weather, evapotranspiration-driven irrigation guidance, and site-level
+            action planning.
           </Text>
 
           {topRecommendation ? (
@@ -199,7 +195,7 @@ export default function DashboardScreen() {
 
         <View style={styles.siteSwitchRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {SITES.map((site) => (
+            {sites.map((site) => (
               <TouchableOpacity
                 key={site.id}
                 style={[
@@ -222,7 +218,7 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.metricsGrid}>
-          <MetricCard label="Sites monitored" value={`${SITES.length}`} />
+          <MetricCard label="Sites monitored" value={`${sites.length}`} />
           <MetricCard
             label="Priority alerts"
             value={`${recommendations.filter((rec) => rec.urgency === "High").length}`}
@@ -294,8 +290,19 @@ export default function DashboardScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>All active sites</Text>
+
+          {recommendations.length === 0 ? (
+            <Text style={styles.sectionSubtitle}>
+              No active recommendations are available yet.
+            </Text>
+          ) : null}
+
           {recommendations.map((rec) => {
-            const site = SITES.find((s) => s.id === rec.siteId)!;
+            const site = sites.find((s) => s.id === rec.siteId);
+            if (!site) {
+              return null;
+            }
+
             return (
               <TouchableOpacity
                 key={rec.siteId}
@@ -318,9 +325,7 @@ export default function DashboardScreen() {
                       },
                     ]}
                   >
-                    <Text
-                      style={[styles.pillText, { color: riskColor(rec.urgency) }]}
-                    >
+                    <Text style={[styles.pillText, { color: riskColor(rec.urgency) }]}>
                       {rec.urgency}
                     </Text>
                   </View>

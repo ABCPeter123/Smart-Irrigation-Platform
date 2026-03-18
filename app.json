@@ -38,6 +38,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow this app to use your location to create irrigation sites from your current position."
+        }
       ]
     ],
     "experiments": {
