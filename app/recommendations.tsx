@@ -1,343 +1,777 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSiteContext } from "../src/context/SiteContext";
-import { buildRecommendation } from "../src/services/irrigation";
-import { fetchWeatherForSite } from "../src/services/weather";
-import { Recommendation, Site, WeatherBundle } from "../src/types";
+import {
+  BackendIrrigationLog,
+  BackendRecommendationResponse,
+  createIrrigationLog,
+  fetchBackendRecommendation,
+  fetchIrrigationLogs,
+} from "../src/services/api";
 
-const palette = {
-  bg: "#F3F6FB",
-  card: "#FFFFFF",
-  ink: "#0B1830",
-  muted: "#5A6B85",
-  border: "#D9E1EE",
-  accent: "#1F7AE0",
-  good: "#1D8F5A",
-  medium: "#D18B16",
-  high: "#C43D3D",
-};
+function getUrgencyStyle(urgency: string) {
+  if (urgency === "High") {
+    return {
+      backgroundColor: "#FEE2E2",
+      color: "#991B1B",
+      borderColor: "#FECACA",
+    };
+  }
 
-const cropLabel = (crop: Site["cropType"]) => {
-  if (crop === "leafy-greens") return "Leafy Greens";
-  if (crop === "strawberries") return "Strawberries";
-  return "Tomatoes";
-};
+  if (urgency === "Medium") {
+    return {
+      backgroundColor: "#FEF3C7",
+      color: "#92400E",
+      borderColor: "#FDE68A",
+    };
+  }
 
-const riskColor = (urgency: Recommendation["urgency"]) => {
-  if (urgency === "High") return palette.high;
-  if (urgency === "Medium") return palette.medium;
-  return palette.good;
-};
+  return {
+    backgroundColor: "#DCFCE7",
+    color: "#166534",
+    borderColor: "#BBF7D0",
+  };
+}
 
-function DataCard({
-  label,
-  value,
-  subvalue,
-}: {
-  label: string;
-  value: string;
-  subvalue?: string;
-}) {
-  return (
-    <View style={styles.dataCard}>
-      <Text style={styles.dataLabel}>{label}</Text>
-      <Text style={styles.dataValue}>{value}</Text>
-      {subvalue ? <Text style={styles.dataSubvalue}>{subvalue}</Text> : null}
-    </View>
-  );
+function calculateLitres(appliedMm: number, areaHa: number) {
+  const areaSqm = areaHa * 10000;
+  return Math.round(appliedMm * areaSqm);
 }
 
 export default function RecommendationsScreen() {
-  const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>({});
+  const { selectedSiteId, selectedSite, loadingSites, sitesError } =
+    useSiteContext();
+
+  const [data, setData] = useState<BackendRecommendationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { sites } = useSiteContext();
+  const [loggingIrrigation, setLoggingIrrigation] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [irrigationLogs, setIrrigationLogs] = useState<BackendIrrigationLog[]>(
+    []
+  );
+  const [appliedMmInput, setAppliedMmInput] = useState("");
+  const [logNotes, setLogNotes] = useState("");
 
-  const loadAllWeather = async () => {
-    const entries = await Promise.all(
-      sites.map(async (site) => {
-        const weather = await fetchWeatherForSite(site);
-        return [site.id, weather] as const;
-      })
-    );
-    setWeatherBySite(Object.fromEntries(entries));
-  };
+  const loadIrrigationLogs = useCallback(async () => {
+    if (!selectedSiteId) {
+      setIrrigationLogs([]);
+      return;
+    }
+
+    const logs = await fetchIrrigationLogs(selectedSiteId);
+    setIrrigationLogs(logs.slice(0, 7));
+  }, [selectedSiteId]);
+
+  const loadRecommendation = useCallback(async () => {
+    if (loadingSites) {
+      return;
+    }
+
+    if (!selectedSiteId) {
+      setData(null);
+      setErrorMessage("No site selected. Add or select a site first.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    try {
+      setErrorMessage(null);
+
+      const result = await fetchBackendRecommendation(selectedSiteId);
+      const logs = await fetchIrrigationLogs(selectedSiteId);
+
+      setData(result);
+      setIrrigationLogs(logs.slice(0, 7));
+
+      const recommendedMm = result.recommendation.recommendedMm;
+
+      if (recommendedMm > 0) {
+        setAppliedMmInput(String(recommendedMm));
+      }
+    } catch (error) {
+      setData(null);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unknown backend error"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedSiteId, loadingSites]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        await loadAllWeather();
-      } finally {
-        setLoading(false);
-      }
-    };
+    loadRecommendation();
+  }, [loadRecommendation]);
 
-    initialize();
-  }, [sites]);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadRecommendation();
+  }, [loadRecommendation]);
 
-  const onRefresh = async () => {
+  const handleLogIrrigation = async () => {
+    if (!data) {
+      return;
+    }
+
+    const appliedMm = Number(appliedMmInput);
+
+    if (!Number.isFinite(appliedMm) || appliedMm <= 0) {
+      Alert.alert("Invalid amount", "Enter a positive irrigation amount in mm.");
+      return;
+    }
+
+    const appliedLitres = calculateLitres(appliedMm, data.site.areaHa);
+
     try {
-      setRefreshing(true);
-      await loadAllWeather();
+      setLoggingIrrigation(true);
+
+      await createIrrigationLog({
+        siteId: data.site.id,
+        appliedMm,
+        appliedLitres,
+        performedAt: new Date().toISOString(),
+        notes: logNotes.trim() || undefined,
+      });
+
+      setLogNotes("");
+
+      Alert.alert(
+        "Irrigation logged",
+        `${appliedMm} mm was logged for ${data.site.name}. The recommendation will now account for this water.`
+      );
+
+      await loadRecommendation();
+      await loadIrrigationLogs();
+    } catch (error) {
+      Alert.alert(
+        "Log failed",
+        error instanceof Error ? error.message : "Unable to log irrigation."
+      );
     } finally {
-      setRefreshing(false);
+      setLoggingIrrigation(false);
     }
   };
 
-  const recommendations = useMemo(() => {
-    return sites
-      .filter((site) => weatherBySite[site.id])
-      .map((site) => {
-        const recommendation = buildRecommendation(site, weatherBySite[site.id]);
-        return { site, recommendation };
-      });
-  }, [sites, weatherBySite]);
-
-  const sortedRecommendations = useMemo(() => {
-    const rank = { High: 3, Medium: 2, Low: 1 } as const;
-    return [...recommendations].sort(
-      (a, b) => rank[b.recommendation.urgency] - rank[a.recommendation.urgency]
-    );
-  }, [recommendations]);
-
-  if (loading) {
+  if (loading || loadingSites) {
     return (
-      <SafeAreaView style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={palette.accent} />
-        <Text style={styles.loadingText}>Loading irrigation recommendations...</Text>
-      </SafeAreaView>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+        <Text style={styles.loadingText}>
+          Loading irrigation recommendation...
+        </Text>
+      </View>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <Text style={styles.title}>Recommendations</Text>
-        <Text style={styles.subtitle}>
-          Site-level irrigation actions generated from live weather, ET, crop profile,
-          soil profile, and optional sensor calibration.
-        </Text>
+  if (sitesError) {
+    return (
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.kicker}>Backend Recommendation</Text>
+        <Text style={styles.title}>Could not load sites</Text>
 
-        {sortedRecommendations.length === 0 ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>No recommendations available</Text>
-            <Text style={styles.cardSubtitle}>
-              Add or select a site to generate irrigation guidance.
-            </Text>
-          </View>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorText}>{sitesError}</Text>
+        </View>
+
+        <Text style={styles.helperText}>
+          Check that your backend is running, your API IP address is correct, and
+          your phone is on the same Wi-Fi as your laptop.
+        </Text>
+      </ScrollView>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.kicker}>Backend Recommendation</Text>
+        <Text style={styles.title}>Could not load recommendation</Text>
+
+        {selectedSite ? (
+          <Text style={styles.subtitle}>
+            Selected site: {selectedSite.name} · {selectedSite.locationLabel}
+          </Text>
         ) : null}
 
-        {sortedRecommendations.map(({ site, recommendation }) => (
-          <View key={site.id} style={styles.card}>
-            <View style={styles.headerRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{site.name}</Text>
-                <Text style={styles.cardSubtitle}>
-                  {cropLabel(site.cropType)} · {site.locationLabel}
-                </Text>
-              </View>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
 
-              <View
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: `${riskColor(recommendation.urgency)}15`,
-                    borderColor: `${riskColor(recommendation.urgency)}45`,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    { color: riskColor(recommendation.urgency) },
-                  ]}
-                >
-                  {recommendation.urgency}
-                </Text>
-              </View>
-            </View>
+        <Text style={styles.helperText}>
+          Check that your backend is running, the selected site exists in
+          PostgreSQL, and the weather endpoint works for this site.
+        </Text>
 
-            <View style={styles.actionBox}>
-              <Text style={styles.actionLabel}>Recommended action</Text>
-              <Text style={styles.actionTitle}>{recommendation.actionLabel}</Text>
-              <Text style={styles.actionText}>{recommendation.summary}</Text>
-            </View>
-
-            <View style={styles.twoCol}>
-              <DataCard label="Start window" value={recommendation.startBy} />
-              <DataCard
-                label="Delivery volume"
-                value={`${recommendation.recommendedLitres.toLocaleString()} L`}
-              />
-            </View>
-
-            <View style={styles.twoCol}>
-              <DataCard label="Risk band" value={recommendation.riskBand} />
-              <DataCard label="Model score" value={`${recommendation.modelScore}%`} />
-            </View>
-
-            <Text style={styles.reasonHeader}>Decision drivers</Text>
-            {recommendation.reasons.map((reason, index) => (
-              <View key={index} style={styles.reasonRow}>
-                <Text style={styles.reasonBullet}>•</Text>
-                <Text style={styles.reasonText}>{reason}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
+        <Pressable style={styles.primaryButton} onPress={loadRecommendation}>
+          <Text style={styles.primaryButtonText}>Try Again</Text>
+        </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    );
+  }
+
+  if (!data) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadingText}>No recommendation data returned.</Text>
+      </View>
+    );
+  }
+
+  const { site, recommendation, weather, recentIrrigationLogs } = data;
+  const urgencyStyle = getUrgencyStyle(recommendation.urgency);
+  const appliedMmNumber = Number(appliedMmInput);
+  const estimatedLitres =
+    Number.isFinite(appliedMmNumber) && appliedMmNumber > 0
+      ? calculateLitres(appliedMmNumber, site.areaHa)
+      : 0;
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <View>
+        <Text style={styles.kicker}>Backend Recommendation</Text>
+        <Text style={styles.title}>{site.name}</Text>
+        <Text style={styles.subtitle}>{site.locationLabel}</Text>
+      </View>
+
+      <View style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <Text style={styles.cardLabel}>Current Action</Text>
+
+          <View
+            style={[
+              styles.urgencyBadge,
+              {
+                backgroundColor: urgencyStyle.backgroundColor,
+                borderColor: urgencyStyle.borderColor,
+              },
+            ]}
+          >
+            <Text style={[styles.urgencyText, { color: urgencyStyle.color }]}>
+              {recommendation.urgency}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.headline}>{recommendation.headline}</Text>
+        <Text style={styles.action}>{recommendation.actionLabel}</Text>
+        <Text style={styles.summary}>{recommendation.summary}</Text>
+
+        <View style={styles.metricRow}>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>
+              {recommendation.recommendedMm}
+            </Text>
+            <Text style={styles.metricLabel}>mm advised</Text>
+          </View>
+
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>
+              {recommendation.recommendedLitres.toLocaleString()}
+            </Text>
+            <Text style={styles.metricLabel}>litres</Text>
+          </View>
+
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{recommendation.modelScore}%</Text>
+            <Text style={styles.metricLabel}>model score</Text>
+          </View>
+        </View>
+
+        <View style={styles.startByBox}>
+          <Text style={styles.startByLabel}>Start by</Text>
+          <Text style={styles.startByValue}>{recommendation.startBy}</Text>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Log Applied Irrigation</Text>
+
+        <Text style={styles.helperText}>
+          Record water already applied. The next recommendation will account for
+          this recent irrigation credit.
+        </Text>
+
+        <Text style={styles.inputLabel}>Applied water, mm</Text>
+        <TextInput
+          style={styles.input}
+          value={appliedMmInput}
+          onChangeText={setAppliedMmInput}
+          keyboardType="decimal-pad"
+          placeholder="e.g. 5"
+          placeholderTextColor="#94A3B8"
+        />
+
+        <View style={styles.estimateBox}>
+          <Text style={styles.estimateLabel}>Estimated volume</Text>
+          <Text style={styles.estimateValue}>
+            {estimatedLitres.toLocaleString()} litres
+          </Text>
+        </View>
+
+        <Text style={styles.inputLabel}>Notes, optional</Text>
+        <TextInput
+          style={[styles.input, styles.notesInput]}
+          value={logNotes}
+          onChangeText={setLogNotes}
+          multiline
+          placeholder="e.g. Applied after morning inspection"
+          placeholderTextColor="#94A3B8"
+        />
+
+        <Pressable
+          style={[
+            styles.primaryButton,
+            loggingIrrigation && styles.disabledButton,
+          ]}
+          onPress={handleLogIrrigation}
+          disabled={loggingIrrigation}
+        >
+          <Text style={styles.primaryButtonText}>
+            {loggingIrrigation ? "Logging..." : "Log This Irrigation"}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Recent Irrigation History</Text>
+
+        {irrigationLogs.length === 0 ? (
+          <Text style={styles.helperText}>
+            No irrigation has been logged for this site yet.
+          </Text>
+        ) : (
+          irrigationLogs.map((log) => (
+            <View key={log.id} style={styles.historyRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyTitle}>
+                  {log.appliedMm} mm ·{" "}
+                  {log.appliedLitres.toLocaleString()} litres
+                </Text>
+                <Text style={styles.historyTime}>
+                  {new Date(log.performedAt).toLocaleString()}
+                </Text>
+                {log.notes ? (
+                  <Text style={styles.historyNotes}>{log.notes}</Text>
+                ) : null}
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Weather Inputs</Text>
+
+        <View style={styles.twoColumnGrid}>
+          <View style={styles.smallMetric}>
+            <Text style={styles.smallMetricValue}>
+              {weather.current.temperatureC ?? "N/A"}°C
+            </Text>
+            <Text style={styles.smallMetricLabel}>Current temp</Text>
+          </View>
+
+          <View style={styles.smallMetric}>
+            <Text style={styles.smallMetricValue}>
+              {weather.current.windSpeedKmh ?? "N/A"} km/h
+            </Text>
+            <Text style={styles.smallMetricLabel}>Wind</Text>
+          </View>
+
+          <View style={styles.smallMetric}>
+            <Text style={styles.smallMetricValue}>
+              {weather.daily.et0Mm ?? "N/A"} mm
+            </Text>
+            <Text style={styles.smallMetricLabel}>Daily ET0</Text>
+          </View>
+
+          <View style={styles.smallMetric}>
+            <Text style={styles.smallMetricValue}>
+              {weather.daily.precipitationSumMm ?? "N/A"} mm
+            </Text>
+            <Text style={styles.smallMetricLabel}>Forecast rain</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sourceText}>
+          Source: {weather.source}
+          {weather.cache?.status ? `, cache ${weather.cache.status}` : ""}
+        </Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Model Inputs</Text>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Crop coefficient</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.cropCoefficient}
+          </Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Crop water demand</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.cropWaterDemandMm} mm
+          </Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Forecast rain</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.forecastRainMm} mm
+          </Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Recent irrigation credit</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.recentAppliedMm} mm
+          </Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Net water need</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.netWaterNeedMm} mm
+          </Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Irrigation cap</Text>
+          <Text style={styles.inputValue}>
+            {recommendation.inputs.irrigationCapMm} mm
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Why This Recommendation</Text>
+
+        {recommendation.reasons.map((reason, index) => (
+          <Text key={index} style={styles.reasonText}>
+            • {reason}
+          </Text>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Site Profile</Text>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Crop</Text>
+          <Text style={styles.inputValue}>{site.cropType}</Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Environment</Text>
+          <Text style={styles.inputValue}>{site.environment}</Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Irrigation method</Text>
+          <Text style={styles.inputValue}>{site.irrigationMethod}</Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Soil type</Text>
+          <Text style={styles.inputValue}>{site.soilType}</Text>
+        </View>
+
+        <View style={styles.inputLine}>
+          <Text style={styles.inputLabel}>Recent logs</Text>
+          <Text style={styles.inputValue}>{recentIrrigationLogs.length}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.footerText}>
+        Generated at {new Date(recommendation.generatedAt).toLocaleString()}
+      </Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: palette.bg,
+    padding: 18,
+    gap: 14,
+    backgroundColor: "#F6F8FB",
   },
-  loadingWrap: {
+  center: {
     flex: 1,
-    backgroundColor: palette.bg,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F6F8FB",
     padding: 24,
   },
   loadingText: {
-    marginTop: 14,
+    marginTop: 12,
     fontSize: 15,
-    color: palette.muted,
+    color: "#475569",
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+  kicker: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1F7AE0",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   title: {
     fontSize: 28,
-    fontWeight: "700",
-    color: palette.ink,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: palette.muted,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  card: {
-    backgroundColor: palette.card,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: palette.muted,
+    fontWeight: "900",
+    color: "#0F172A",
     marginTop: 4,
   },
-  pill: {
+  subtitle: {
+    fontSize: 15,
+    color: "#475569",
+    marginTop: 2,
+  },
+  heroCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  urgencyBadge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
-  pillText: {
-    fontSize: 12,
-    fontWeight: "700",
+  urgencyText: {
+    fontSize: 13,
+    fontWeight: "800",
   },
-  actionBox: {
-    backgroundColor: "#F8FAFD",
+  headline: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  action: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#1F7AE0",
+  },
+  summary: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#334155",
+  },
+  metricRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricBox: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
+    padding: 12,
   },
-  actionLabel: {
+  metricValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  metricLabel: {
     fontSize: 12,
-    color: palette.muted,
-    marginBottom: 6,
-    fontWeight: "600",
+    color: "#64748B",
+    marginTop: 3,
   },
-  actionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: palette.ink,
-    marginBottom: 6,
+  startByBox: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 16,
+    padding: 12,
   },
-  actionText: {
+  startByLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#1D4ED8",
+    textTransform: "uppercase",
+  },
+  startByValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1E3A8A",
+    marginTop: 4,
+  },
+  twoColumnGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  smallMetric: {
+    width: "48%",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+  },
+  smallMetricValue: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  smallMetricLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 3,
+  },
+  sourceText: {
+    fontSize: 13,
+    color: "#64748B",
+  },
+  inputLabel: {
     fontSize: 14,
-    color: palette.muted,
-    lineHeight: 21,
+    color: "#64748B",
+    fontWeight: "700",
   },
-  twoCol: {
+  input: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#0F172A",
+  },
+  notesInput: {
+    minHeight: 72,
+    textAlignVertical: "top",
+  },
+  estimateBox: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 14,
+    padding: 12,
+  },
+  estimateLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#1D4ED8",
+    textTransform: "uppercase",
+  },
+  estimateValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#1E3A8A",
+    marginTop: 4,
+  },
+  inputLine: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingBottom: 8,
   },
-  dataCard: {
-    width: "48%",
-    backgroundColor: "#F8FAFD",
-    borderRadius: 14,
-    padding: 14,
-  },
-  dataLabel: {
-    fontSize: 12,
-    color: palette.muted,
-    marginBottom: 6,
-    fontWeight: "600",
-  },
-  dataValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  dataSubvalue: {
-    fontSize: 13,
-    color: palette.muted,
-    marginTop: 4,
-  },
-  reasonHeader: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: palette.ink,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  reasonRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 6,
-  },
-  reasonBullet: {
-    fontSize: 18,
-    color: palette.accent,
-    marginRight: 8,
-    lineHeight: 20,
+  inputValue: {
+    fontSize: 14,
+    color: "#0F172A",
+    fontWeight: "800",
+    textAlign: "right",
+    flex: 1,
   },
   reasonText: {
-    flex: 1,
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#334155",
+  },
+  footerText: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+    paddingBottom: 12,
+  },
+  errorCard: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+  },
+  errorText: {
+    color: "#991B1B",
     fontSize: 14,
-    color: palette.muted,
     lineHeight: 20,
+  },
+  helperText: {
+    fontSize: 14,
+    color: "#475569",
+    lineHeight: 20,
+  },
+  primaryButton: {
+    backgroundColor: "#1F7AE0",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  historyRow: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  historyTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  historyTime: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 4,
+  },
+  historyNotes: {
+    fontSize: 13,
+    color: "#334155",
+    marginTop: 6,
+    lineHeight: 19,
   },
 });

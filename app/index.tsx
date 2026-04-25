@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -10,9 +11,11 @@ import {
   View,
 } from "react-native";
 import { useSiteContext } from "../src/context/SiteContext";
-import { buildRecommendation } from "../src/services/irrigation";
-import { fetchWeatherForSite } from "../src/services/weather";
-import { Recommendation, Site, WeatherBundle } from "../src/types";
+import {
+  BackendRecommendationResponse,
+  fetchBackendRecommendation,
+} from "../src/services/api";
+import { Site } from "../src/types";
 
 const palette = {
   bg: "#F3F6FB",
@@ -33,7 +36,7 @@ const cropLabel = (crop: Site["cropType"]) => {
   return "Tomatoes";
 };
 
-const riskColor = (urgency: Recommendation["urgency"]) => {
+const riskColor = (urgency: string) => {
   if (urgency === "High") return palette.high;
   if (urgency === "Medium") return palette.medium;
   return palette.good;
@@ -83,6 +86,7 @@ function SectionTitle({
         <Text style={styles.sectionTitle}>{title}</Text>
         {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
       </View>
+
       {rightPill ? (
         <View
           style={[
@@ -93,7 +97,12 @@ function SectionTitle({
             },
           ]}
         >
-          <Text style={[styles.pillText, { color: rightPillColor ?? palette.accent }]}>
+          <Text
+            style={[
+              styles.pillText,
+              { color: rightPillColor ?? palette.accent },
+            ]}
+          >
             {rightPill}
           </Text>
         </View>
@@ -103,60 +112,114 @@ function SectionTitle({
 }
 
 export default function DashboardScreen() {
-  const { sites, selectedSiteId, selectedSite, setSelectedSiteId } = useSiteContext();
-  const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>({});
-  const [loading, setLoading] = useState(true);
+  const {
+    sites,
+    selectedSiteId,
+    selectedSite,
+    setSelectedSiteId,
+    loadingSites,
+    sitesError,
+    refreshSites,
+  } = useSiteContext();
+
+  const [recommendationsBySite, setRecommendationsBySite] = useState<
+    Record<string, BackendRecommendationResponse>
+  >({});
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [recommendationError, setRecommendationError] = useState<string | null>(
+    null
+  );
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadAllWeather = async () => {
-    const entries = await Promise.all(
-      sites.map(async (site) => {
-        const weather = await fetchWeatherForSite(site);
-        return [site.id, weather] as const;
-      })
-    );
-
-    setWeatherBySite(Object.fromEntries(entries));
-  };
-
-  const initialize = async () => {
-    try {
-      setLoading(true);
-      await loadAllWeather();
-    } finally {
-      setLoading(false);
+  const loadRecommendations = useCallback(async () => {
+    if (loadingSites) {
+      return;
     }
-  };
 
-  const onRefresh = async () => {
+    if (sites.length === 0) {
+      setRecommendationsBySite({});
+      setLoadingRecommendations(false);
+      return;
+    }
+
+    try {
+      setLoadingRecommendations(true);
+      setRecommendationError(null);
+
+      const entries = await Promise.all(
+        sites.map(async (site) => {
+          const recommendation = await fetchBackendRecommendation(site.id);
+          return [site.id, recommendation] as const;
+        })
+      );
+
+      setRecommendationsBySite(Object.fromEntries(entries));
+    } catch (error) {
+      setRecommendationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load backend recommendations."
+      );
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }, [sites, loadingSites]);
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [loadRecommendations]);
+
+  const onRefresh = useCallback(async () => {
     try {
       setRefreshing(true);
-      await loadAllWeather();
+      await refreshSites();
+      await loadRecommendations();
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [refreshSites, loadRecommendations]);
 
-  useEffect(() => {
-    initialize();
-  }, [sites]);
-
-  const recommendations = useMemo(() => {
+  const recommendationList = useMemo(() => {
     return sites
-      .filter((site) => weatherBySite[site.id])
-      .map((site) => buildRecommendation(site, weatherBySite[site.id]));
-  }, [sites, weatherBySite]);
+      .map((site) => recommendationsBySite[site.id])
+      .filter(Boolean) as BackendRecommendationResponse[];
+  }, [sites, recommendationsBySite]);
 
-  const selectedWeather = weatherBySite[selectedSite.id];
-  const selectedRecommendation =
-    recommendations.find((rec) => rec.siteId === selectedSite.id) ?? null;
+  const selectedRecommendation = selectedSite
+    ? recommendationsBySite[selectedSite.id] ?? null
+    : null;
 
   const topRecommendation = useMemo(() => {
     const rank = { High: 3, Medium: 2, Low: 1 } as const;
-    return [...recommendations].sort((a, b) => rank[b.urgency] - rank[a.urgency])[0];
-  }, [recommendations]);
 
-  if (loading) {
+    return [...recommendationList].sort((a, b) => {
+      return (
+        rank[b.recommendation.urgency] - rank[a.recommendation.urgency] ||
+        b.recommendation.recommendedMm - a.recommendation.recommendedMm
+      );
+    })[0];
+  }, [recommendationList]);
+
+  const highPriorityCount = recommendationList.filter(
+    (item) => item.recommendation.urgency === "High"
+  ).length;
+
+  const totalRecommendedMm = recommendationList.reduce(
+    (sum, item) => sum + item.recommendation.recommendedMm,
+    0
+  );
+
+  const averageModelScore =
+    recommendationList.length > 0
+      ? Math.round(
+          recommendationList.reduce(
+            (sum, item) => sum + item.recommendation.modelScore,
+            0
+          ) / recommendationList.length
+        )
+      : 0;
+
+  if (loadingSites || loadingRecommendations) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
         <ActivityIndicator size="large" color={palette.accent} />
@@ -165,33 +228,99 @@ export default function DashboardScreen() {
     );
   }
 
+  if (sitesError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Could not load backend sites</Text>
+            <Text style={styles.errorText}>{sitesError}</Text>
+
+            <Pressable style={styles.primaryButton} onPress={refreshSites}>
+              <Text style={styles.primaryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (sites.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={styles.heroCard}>
+            <Text style={styles.heroEyebrow}>Northern Irrigation</Text>
+            <Text style={styles.heroTitle}>Operational Dashboard</Text>
+            <Text style={styles.heroSubtitle}>
+              Add a site to start generating backend-powered irrigation guidance.
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>No backend sites yet</Text>
+            <Text style={styles.sectionSubtitle}>
+              Go to the Sites tab and add a site manually or from your current
+              location. The Dashboard will then show live weather-based
+              recommendations across all sites.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.heroCard}>
           <Text style={styles.heroEyebrow}>Northern Irrigation</Text>
           <Text style={styles.heroTitle}>Operational Dashboard</Text>
           <Text style={styles.heroSubtitle}>
-            Live weather, evapotranspiration-driven irrigation guidance, and site-level
-            action planning.
+            Backend-powered site monitoring, live weather inputs, cached
+            evapotranspiration data, and irrigation action planning.
           </Text>
 
           {topRecommendation ? (
             <View style={styles.heroInnerCard}>
               <Text style={styles.heroInnerLabel}>Top action today</Text>
-              <Text style={styles.heroInnerTitle}>{topRecommendation.headline}</Text>
-              <Text style={styles.heroInnerText}>
-                {topRecommendation.actionLabel} {topRecommendation.startBy}
+              <Text style={styles.heroInnerTitle}>
+                {topRecommendation.site.name}
               </Text>
               <Text style={styles.heroInnerText}>
-                Model score: {topRecommendation.modelScore}%
+                {topRecommendation.recommendation.actionLabel} ·{" "}
+                {topRecommendation.recommendation.startBy}
+              </Text>
+              <Text style={styles.heroInnerText}>
+                Urgency: {topRecommendation.recommendation.urgency} · Model
+                score: {topRecommendation.recommendation.modelScore}%
               </Text>
             </View>
           ) : null}
         </View>
+
+        {recommendationError ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>
+              Some recommendation data could not load
+            </Text>
+            <Text style={styles.errorText}>{recommendationError}</Text>
+
+            <Pressable style={styles.primaryButton} onPress={loadRecommendations}>
+              <Text style={styles.primaryButtonText}>Retry Recommendations</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={styles.siteSwitchRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -219,124 +348,150 @@ export default function DashboardScreen() {
 
         <View style={styles.metricsGrid}>
           <MetricCard label="Sites monitored" value={`${sites.length}`} />
-          <MetricCard
-            label="Priority alerts"
-            value={`${recommendations.filter((rec) => rec.urgency === "High").length}`}
-          />
+          <MetricCard label="Priority alerts" value={`${highPriorityCount}`} />
           <MetricCard
             label="Water advised"
-            value={`${recommendations.reduce((sum, rec) => sum + rec.recommendedMm, 0).toFixed(1)} mm`}
+            value={`${totalRecommendedMm.toFixed(1)} mm`}
           />
-          <MetricCard
-            label="Average score"
-            value={`${
-              recommendations.length
-                ? Math.round(
-                    recommendations.reduce((sum, rec) => sum + rec.modelScore, 0) /
-                      recommendations.length
-                  )
-                : 0
-            }%`}
-          />
+          <MetricCard label="Average score" value={`${averageModelScore}%`} />
         </View>
 
-        {selectedRecommendation && selectedWeather ? (
+        {selectedSite && selectedRecommendation ? (
           <View style={styles.card}>
             <SectionTitle
-              title={selectedSite.name}
-              subtitle={`${cropLabel(selectedSite.cropType)} · ${selectedSite.locationLabel}`}
-              rightPill={selectedRecommendation.riskBand}
-              rightPillColor={riskColor(selectedRecommendation.urgency)}
+              title={selectedRecommendation.site.name}
+              subtitle={`${cropLabel(selectedSite.cropType)} · ${
+                selectedRecommendation.site.locationLabel
+              }`}
+              rightPill={selectedRecommendation.recommendation.riskBand}
+              rightPillColor={riskColor(
+                selectedRecommendation.recommendation.urgency
+              )}
             />
 
             <View style={styles.recommendationBox}>
-              <Text style={styles.recommendationLabel}>Recommendation</Text>
-              <Text style={styles.recommendationTitle}>
-                {selectedRecommendation.actionLabel}
+              <Text style={styles.recommendationLabel}>
+                Selected site recommendation
               </Text>
-              <Text style={styles.bodyText}>{selectedRecommendation.summary}</Text>
+              <Text style={styles.recommendationTitle}>
+                {selectedRecommendation.recommendation.actionLabel}
+              </Text>
+              <Text style={styles.bodyText}>
+                {selectedRecommendation.recommendation.summary}
+              </Text>
             </View>
 
             <View style={styles.twoCol}>
-              <MiniDataCard label="Urgency" value={selectedRecommendation.urgency} />
+              <MiniDataCard
+                label="Urgency"
+                value={selectedRecommendation.recommendation.urgency}
+              />
               <MiniDataCard
                 label="Model score"
-                value={`${selectedRecommendation.modelScore}%`}
+                value={`${selectedRecommendation.recommendation.modelScore}%`}
               />
             </View>
 
             <View style={styles.twoCol}>
               <MiniDataCard
                 label="Current weather"
-                value={`${selectedWeather.current.temperatureC}°C`}
-                subvalue={`Wind ${selectedWeather.current.windSpeedKmh} km/h`}
+                value={`${
+                  selectedRecommendation.weather.current.temperatureC ?? "N/A"
+                }°C`}
+                subvalue={`Wind ${
+                  selectedRecommendation.weather.current.windSpeedKmh ?? "N/A"
+                } km/h`}
               />
               <MiniDataCard
                 label="Today"
-                value={`${selectedWeather.today.maxTempC}° / ${selectedWeather.today.minTempC}°`}
-                subvalue={`${selectedWeather.today.precipitationMm} mm precipitation`}
+                value={`${
+                  selectedRecommendation.weather.daily.et0Mm ?? "N/A"
+                } mm ET0`}
+                subvalue={`${
+                  selectedRecommendation.weather.daily.precipitationSumMm ??
+                  "N/A"
+                } mm forecast rain`}
               />
             </View>
 
             <Text style={styles.subHeader}>Decision drivers</Text>
-            {selectedRecommendation.reasons.map((reason, index) => (
-              <View key={index} style={styles.reasonRow}>
-                <Text style={styles.reasonBullet}>•</Text>
-                <Text style={styles.reasonText}>{reason}</Text>
-              </View>
-            ))}
+            {selectedRecommendation.recommendation.reasons.map(
+              (reason, index) => (
+                <View key={index} style={styles.reasonRow}>
+                  <Text style={styles.reasonBullet}>•</Text>
+                  <Text style={styles.reasonText}>{reason}</Text>
+                </View>
+              )
+            )}
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>
+              No recommendation for selected site
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              Pull to refresh. Confirm the backend is running and the selected
+              site exists in PostgreSQL.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>All active sites</Text>
 
-          {recommendations.length === 0 ? (
+          {recommendationList.length === 0 ? (
             <Text style={styles.sectionSubtitle}>
-              No active recommendations are available yet.
+              No active backend recommendations are available yet.
             </Text>
           ) : null}
 
-          {recommendations.map((rec) => {
-            const site = sites.find((s) => s.id === rec.siteId);
-            if (!site) {
-              return null;
-            }
+          {recommendationList.map((item) => {
+            const urgency = item.recommendation.urgency;
+            const color = riskColor(urgency);
 
             return (
               <TouchableOpacity
-                key={rec.siteId}
+                key={item.site.id}
                 style={styles.siteCard}
-                onPress={() => setSelectedSiteId(rec.siteId)}
+                onPress={() => setSelectedSiteId(item.site.id)}
               >
-                <View style={styles.rowBetween}>
+                <View style={styles.siteCardTop}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.siteName}>{site.name}</Text>
-                    <Text style={styles.siteMeta}>
-                      {cropLabel(site.cropType)} · {site.locationLabel}
+                    <Text style={styles.siteCardTitle}>{item.site.name}</Text>
+                    <Text style={styles.siteCardSubtitle}>
+                      {item.site.cropType} · {item.site.locationLabel}
                     </Text>
                   </View>
+
                   <View
                     style={[
                       styles.pill,
                       {
-                        backgroundColor: `${riskColor(rec.urgency)}15`,
-                        borderColor: `${riskColor(rec.urgency)}45`,
+                        backgroundColor: `${color}15`,
+                        borderColor: `${color}45`,
                       },
                     ]}
                   >
-                    <Text style={[styles.pillText, { color: riskColor(rec.urgency) }]}>
-                      {rec.urgency}
-                    </Text>
+                    <Text style={[styles.pillText, { color }]}>{urgency}</Text>
                   </View>
                 </View>
 
-                <Text style={styles.siteAction}>{rec.actionLabel}</Text>
-                <Text style={styles.siteMeta}>{rec.startBy}</Text>
+                <Text style={styles.siteCardAction}>
+                  {item.recommendation.actionLabel}
+                </Text>
+                <Text style={styles.siteCardSummary}>
+                  {item.recommendation.startBy} ·{" "}
+                  {item.recommendation.recommendedLitres.toLocaleString()} litres
+                </Text>
               </TouchableOpacity>
             );
           })}
         </View>
+
+        <Text style={styles.footerText}>
+          Dashboard data comes from PostgreSQL site records and backend
+          recommendation endpoints.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -350,8 +505,8 @@ const styles = StyleSheet.create({
   loadingWrap: {
     flex: 1,
     backgroundColor: palette.bg,
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   loadingText: {
@@ -361,51 +516,56 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 36,
   },
   heroCard: {
     backgroundColor: palette.hero,
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 26,
+    padding: 22,
     marginBottom: 16,
   },
   heroEyebrow: {
-    color: "#B8C7E6",
+    color: "#9CC8FF",
     fontSize: 13,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
     marginBottom: 8,
-    fontWeight: "600",
   },
   heroTitle: {
     color: "#FFFFFF",
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: 30,
+    fontWeight: "800",
     marginBottom: 8,
   },
   heroSubtitle: {
-    color: "#DCE6F8",
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 16,
+    color: "#D5E4F7",
+    fontSize: 15,
+    lineHeight: 22,
   },
   heroInnerCard: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
   },
   heroInnerLabel: {
-    color: "#C9D7F2",
+    color: "#9CC8FF",
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
+    textTransform: "uppercase",
     marginBottom: 6,
   },
   heroInnerTitle: {
     color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 21,
+    fontWeight: "800",
     marginBottom: 6,
   },
   heroInnerText: {
-    color: "#E3ECFA",
+    color: "#D5E4F7",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -417,8 +577,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
     borderRadius: 999,
-    paddingVertical: 10,
     paddingHorizontal: 14,
+    paddingVertical: 10,
     marginRight: 10,
   },
   siteChipActive: {
@@ -427,8 +587,8 @@ const styles = StyleSheet.create({
   },
   siteChipText: {
     color: palette.ink,
-    fontWeight: "600",
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: "700",
   },
   siteChipTextActive: {
     color: "#FFFFFF",
@@ -442,40 +602,54 @@ const styles = StyleSheet.create({
   metricCard: {
     width: "48%",
     backgroundColor: palette.card,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: palette.muted,
+    fontWeight: "700",
     marginBottom: 8,
+    textTransform: "uppercase",
   },
   metricValue: {
-    fontSize: 22,
-    fontWeight: "700",
+    fontSize: 25,
     color: palette.ink,
+    fontWeight: "800",
   },
   card: {
     backgroundColor: palette.card,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
     marginBottom: 16,
   },
   sectionTitleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
+    gap: 12,
     marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: "800",
     color: palette.ink,
   },
   sectionSubtitle: {
     fontSize: 14,
     color: palette.muted,
+    lineHeight: 20,
     marginTop: 4,
+  },
+  pill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: "800",
   },
   recommendationBox: {
     backgroundColor: "#F8FAFD",
@@ -486,12 +660,13 @@ const styles = StyleSheet.create({
   recommendationLabel: {
     fontSize: 12,
     color: palette.muted,
+    fontWeight: "700",
     marginBottom: 6,
-    fontWeight: "600",
+    textTransform: "uppercase",
   },
   recommendationTitle: {
-    fontSize: 22,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: "800",
     color: palette.ink,
     marginBottom: 6,
   },
@@ -514,13 +689,13 @@ const styles = StyleSheet.create({
   miniLabel: {
     fontSize: 12,
     color: palette.muted,
+    fontWeight: "700",
     marginBottom: 6,
-    fontWeight: "600",
   },
   miniValue: {
     fontSize: 18,
-    fontWeight: "700",
     color: palette.ink,
+    fontWeight: "800",
   },
   miniSubvalue: {
     fontSize: 13,
@@ -529,63 +704,98 @@ const styles = StyleSheet.create({
   },
   subHeader: {
     fontSize: 16,
-    fontWeight: "700",
     color: palette.ink,
-    marginTop: 4,
+    fontWeight: "800",
     marginBottom: 8,
+    marginTop: 4,
   },
   reasonRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   reasonBullet: {
-    fontSize: 18,
     color: palette.accent,
+    fontSize: 16,
     marginRight: 8,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   reasonText: {
     flex: 1,
-    fontSize: 14,
     color: palette.muted,
-    lineHeight: 20,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  pill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  pillText: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 14,
+    lineHeight: 21,
   },
   siteCard: {
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
-    paddingTop: 14,
-    marginTop: 14,
+    backgroundColor: "#F8FAFD",
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E8EEF7",
   },
-  siteName: {
+  siteCardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 10,
+  },
+  siteCardTitle: {
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "800",
     color: palette.ink,
   },
-  siteMeta: {
+  siteCardSubtitle: {
     fontSize: 13,
     color: palette.muted,
-    marginTop: 4,
+    marginTop: 3,
   },
-  siteAction: {
-    fontSize: 16,
-    fontWeight: "700",
+  siteCardAction: {
+    fontSize: 18,
+    fontWeight: "800",
     color: palette.ink,
-    marginTop: 10,
+    marginBottom: 4,
+  },
+  siteCardSummary: {
+    fontSize: 14,
+    color: palette.muted,
+  },
+  errorCard: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#991B1B",
+    marginBottom: 6,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#991B1B",
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  primaryButton: {
+    backgroundColor: palette.accent,
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  footerText: {
+    textAlign: "center",
+    color: "#94A3B8",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 2,
   },
 });

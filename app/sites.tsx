@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -9,13 +10,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import { useSiteContext } from "../src/context/SiteContext";
-import { buildRecommendation } from "../src/services/irrigation";
+import {
+  BackendRecommendationResponse,
+  fetchBackendRecommendation,
+} from "../src/services/api";
 import { getCurrentLocationSite } from "../src/services/location";
-import { fetchWeatherForSite } from "../src/services/weather";
-import { Recommendation, Site, WeatherBundle } from "../src/types";
+import { Site } from "../src/types";
 
 const palette = {
   bg: "#F3F6FB",
@@ -35,10 +37,11 @@ const cropLabel = (crop: Site["cropType"]) => {
   return "Tomatoes";
 };
 
-const riskColor = (urgency: Recommendation["urgency"]) => {
+const statusColor = (urgency?: string) => {
   if (urgency === "High") return palette.high;
   if (urgency === "Medium") return palette.medium;
-  return palette.good;
+  if (urgency === "Low") return palette.good;
+  return palette.muted;
 };
 
 function InfoCard({
@@ -73,9 +76,11 @@ function OptionRow<T extends string>({
   return (
     <View style={styles.optionGroup}>
       <Text style={styles.inputLabel}>{title}</Text>
+
       <View style={styles.optionWrap}>
         {options.map((option) => {
           const active = option === value;
+
           return (
             <TouchableOpacity
               key={option}
@@ -83,7 +88,10 @@ function OptionRow<T extends string>({
               onPress={() => onChange(option)}
             >
               <Text
-                style={[styles.optionChipText, active && styles.optionChipTextActive]}
+                style={[
+                  styles.optionChipText,
+                  active && styles.optionChipTextActive,
+                ]}
               >
                 {option}
               </Text>
@@ -96,21 +104,28 @@ function OptionRow<T extends string>({
 }
 
 export default function SitesScreen() {
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const {
     sites,
     selectedSiteId,
     setSelectedSiteId,
     addCustomSite,
+    updateSite,
     removeSite,
-    isDefaultSite,
+    loadingSites,
+    sitesError,
+    refreshSites,
   } = useSiteContext();
 
-  const [weatherBySite, setWeatherBySite] = useState<Record<string, WeatherBundle>>(
-    {}
-  );
-  const [loading, setLoading] = useState(true);
+  const [statusBySite, setStatusBySite] = useState<
+    Record<string, BackendRecommendationResponse>
+  >({});
+  const [loadingStatus, setLoadingStatus] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [savingSite, setSavingSite] = useState(false);
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
 
   const [siteName, setSiteName] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
@@ -118,57 +133,64 @@ export default function SitesScreen() {
   const [longitude, setLongitude] = useState("");
   const [areaHa, setAreaHa] = useState("0.25");
   const [cropType, setCropType] = useState<Site["cropType"]>("tomatoes");
-  const [environment, setEnvironment] = useState<Site["environment"]>("open-field");
+  const [environment, setEnvironment] =
+    useState<Site["environment"]>("open-field");
   const [irrigationMethod, setIrrigationMethod] =
     useState<Site["irrigationMethod"]>("drip");
   const [soilType, setSoilType] = useState<Site["soilType"]>("loam");
 
-  const loadAllWeather = async () => {
-    const entries = await Promise.all(
-      sites.map(async (site) => {
-        const weather = await fetchWeatherForSite(site);
-        return [site.id, weather] as const;
-      })
-    );
+  const editingSite = useMemo(() => {
+    if (!editingSiteId) return null;
+    return sites.find((site) => site.id === editingSiteId) ?? null;
+  }, [editingSiteId, sites]);
 
-    setWeatherBySite((prev) => {
-      const next = Object.fromEntries(entries);
-      return next;
-    });
+  const loadSiteStatuses = async () => {
+    if (sites.length === 0) {
+      setStatusBySite({});
+      return;
+    }
+
+    try {
+      setLoadingStatus(true);
+
+      const entries = await Promise.all(
+        sites.map(async (site) => {
+          const recommendation = await fetchBackendRecommendation(site.id);
+          return [site.id, recommendation] as const;
+        })
+      );
+
+      setStatusBySite(Object.fromEntries(entries));
+    } catch {
+      setStatusBySite({});
+    } finally {
+      setLoadingStatus(false);
+    }
   };
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        await loadAllWeather();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initialize();
+    loadSiteStatuses();
   }, [sites]);
+
+  const siteProfiles = useMemo(() => {
+    return sites.map((site) => ({
+      site,
+      backendData: statusBySite[site.id],
+    }));
+  }, [sites, statusBySite]);
 
   const onRefresh = async () => {
     try {
       setRefreshing(true);
-      await loadAllWeather();
+      await refreshSites();
+      await loadSiteStatuses();
     } finally {
       setRefreshing(false);
     }
   };
 
-  const siteProfiles = useMemo(() => {
-    return sites
-      .filter((site) => weatherBySite[site.id])
-      .map((site) => {
-        const recommendation = buildRecommendation(site, weatherBySite[site.id]);
-        return { site, recommendation, weather: weatherBySite[site.id] };
-      });
-  }, [sites, weatherBySite]);
-
   const resetForm = () => {
+    setEditingSiteId(null);
     setSiteName("");
     setLocationLabel("");
     setLatitude("");
@@ -180,24 +202,47 @@ export default function SitesScreen() {
     setSoilType("loam");
   };
 
-  const handleAddSite = () => {
+  const fillFormFromSite = (site: Site) => {
+    setEditingSiteId(site.id);
+    setSiteName(site.name);
+    setLocationLabel(site.locationLabel);
+    setLatitude(String(site.latitude));
+    setLongitude(String(site.longitude));
+    setAreaHa(String(site.areaHa));
+    setCropType(site.cropType);
+    setEnvironment(site.environment);
+    setIrrigationMethod(site.irrigationMethod);
+    setSoilType(site.soilType);
+
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({
+        y: 0,
+        animated: true,
+      });
+    });
+  };
+
+  const validateForm = () => {
     const lat = Number(latitude);
     const lon = Number(longitude);
     const area = Number(areaHa);
 
     if (!siteName.trim()) {
       Alert.alert("Missing site name", "Please enter a site name.");
-      return;
+      return null;
     }
 
     if (!locationLabel.trim()) {
       Alert.alert("Missing location label", "Please enter a location label.");
-      return;
+      return null;
     }
 
     if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-      Alert.alert("Invalid latitude", "Latitude must be a number between -90 and 90.");
-      return;
+      Alert.alert(
+        "Invalid latitude",
+        "Latitude must be a number between -90 and 90."
+      );
+      return null;
     }
 
     if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
@@ -205,15 +250,15 @@ export default function SitesScreen() {
         "Invalid longitude",
         "Longitude must be a number between -180 and 180."
       );
-      return;
+      return null;
     }
 
     if (!Number.isFinite(area) || area <= 0) {
       Alert.alert("Invalid area", "Area must be a positive number in hectares.");
-      return;
+      return null;
     }
 
-    addCustomSite({
+    return {
       name: siteName.trim(),
       locationLabel: locationLabel.trim(),
       latitude: lat,
@@ -223,10 +268,38 @@ export default function SitesScreen() {
       areaHa: area,
       irrigationMethod,
       soilType,
-    });
+      connectedProbes: editingSite?.connectedProbes ?? 0,
+    };
+  };
 
-    resetForm();
-    Alert.alert("Site added", "Your custom site is now available across the app.");
+  const handleSaveSite = async () => {
+    const payload = validateForm();
+
+    if (!payload) {
+      return;
+    }
+
+    try {
+      setSavingSite(true);
+
+      if (editingSiteId) {
+        await updateSite(editingSiteId, payload);
+        Alert.alert("Site updated", "Your site changes were saved.");
+      } else {
+        await addCustomSite(payload);
+        Alert.alert("Site added", "Your site was saved to the backend database.");
+      }
+
+      resetForm();
+      await loadSiteStatuses();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save the site.";
+
+      Alert.alert("Site save failed", message);
+    } finally {
+      setSavingSite(false);
+    }
   };
 
   const handleUseCurrentLocation = async () => {
@@ -235,7 +308,7 @@ export default function SitesScreen() {
 
       const currentSite = await getCurrentLocationSite();
 
-      addCustomSite({
+      await addCustomSite({
         name: "My Current Site",
         locationLabel: currentSite.locationLabel,
         latitude: currentSite.latitude,
@@ -245,40 +318,49 @@ export default function SitesScreen() {
         areaHa: 0.25,
         irrigationMethod: "drip",
         soilType: "loam",
+        connectedProbes: 0,
       });
 
       Alert.alert(
         "Location site added",
-        `A new site was created for ${currentSite.locationLabel}.`
+        `A backend site was created for ${currentSite.locationLabel}.`
       );
+
+      await loadSiteStatuses();
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Unable to access the device location.";
+
       Alert.alert("Location unavailable", message);
     } finally {
       setLocating(false);
     }
   };
 
-  const handleRemoveSite = (site: Site) => {
-    if (isDefaultSite(site.id)) {
-      Alert.alert(
-        "Built-in site",
-        "Demo sites cannot be removed in this version of the app."
-      );
-      return;
-    }
+  const handleRemoveSite = async (site: Site) => {
+    try {
+      await removeSite(site.id);
 
-    removeSite(site.id);
+      if (editingSiteId === site.id) {
+        resetForm();
+      }
+
+      Alert.alert("Site removed", `${site.name} was removed from the backend.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to remove the site.";
+
+      Alert.alert("Remove failed", message);
+    }
   };
 
-  if (loading) {
+  if (loadingSites) {
     return (
       <SafeAreaView style={styles.loadingWrap}>
         <ActivityIndicator size="large" color={palette.accent} />
-        <Text style={styles.loadingText}>Loading site profiles...</Text>
+        <Text style={styles.loadingText}>Loading backend site profiles...</Text>
       </SafeAreaView>
     );
   }
@@ -286,40 +368,79 @@ export default function SitesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <Text style={styles.title}>Sites</Text>
         <Text style={styles.subtitle}>
-          Operational site profiles with crop, irrigation, weather, and current action
-          status.
+          Manage backend site profiles, select the active site, and create new
+          field or greenhouse records.
         </Text>
+
+        {sitesError ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorTitle}>Could not load backend sites</Text>
+            <Text style={styles.errorText}>{sitesError}</Text>
+
+            <TouchableOpacity style={styles.primaryButton} onPress={refreshSites}>
+              <Text style={styles.primaryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Use current location</Text>
           <Text style={styles.helperText}>
-            Create a site from your phone’s current position. This is useful for field
-            demos, quick validation, and on-site decision support.
+            Create a backend site from your phone’s current position. You can
+            adjust crop and irrigation details later.
           </Text>
 
           <TouchableOpacity
-            style={[styles.secondaryButton, locating && styles.secondaryButtonDisabled]}
+            style={[
+              styles.secondaryButton,
+              locating && styles.secondaryButtonDisabled,
+            ]}
             onPress={handleUseCurrentLocation}
             disabled={locating}
           >
             {locating ? (
               <View style={styles.buttonRow}>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.secondaryButtonText}>Detecting location...</Text>
+                <Text style={styles.secondaryButtonText}>
+                  Detecting location...
+                </Text>
               </View>
             ) : (
-              <Text style={styles.secondaryButtonText}>Use My Current Location</Text>
+              <Text style={styles.secondaryButtonText}>
+                Use My Current Location
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Add a site manually</Text>
+          <View style={styles.formHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>
+                {editingSiteId ? "Edit site" : "Add a site manually"}
+              </Text>
+
+              {editingSite ? (
+                <Text style={styles.cardSubtitle}>
+                  Editing {editingSite.name}
+                </Text>
+              ) : null}
+            </View>
+
+            {editingSiteId ? (
+              <TouchableOpacity style={styles.cancelEditButton} onPress={resetForm}>
+                <Text style={styles.cancelEditText}>Cancel</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
           <Text style={styles.inputLabel}>Site name</Text>
           <TextInput
@@ -365,7 +486,7 @@ export default function SitesScreen() {
             </View>
           </View>
 
-          <Text style={styles.inputLabel}>Area (ha)</Text>
+          <Text style={styles.inputLabel}>Area, ha</Text>
           <TextInput
             style={styles.input}
             value={areaHa}
@@ -403,58 +524,72 @@ export default function SitesScreen() {
             onChange={setSoilType}
           />
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handleAddSite}>
-            <Text style={styles.primaryButtonText}>Add Site</Text>
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              savingSite && styles.secondaryButtonDisabled,
+            ]}
+            onPress={handleSaveSite}
+            disabled={savingSite}
+          >
+            <Text style={styles.primaryButtonText}>
+              {savingSite
+                ? "Saving..."
+                : editingSiteId
+                ? "Save Changes"
+                : "Add Site"}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {siteProfiles.map(({ site, recommendation, weather }) => {
+        {loadingStatus ? (
+          <View style={styles.card}>
+            <ActivityIndicator size="small" color={palette.accent} />
+            <Text style={styles.helperText}>Loading site status badges...</Text>
+          </View>
+        ) : null}
+
+        {siteProfiles.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>No sites yet</Text>
+            <Text style={styles.helperText}>
+              Add a site manually or use your current location to create the
+              first backend site.
+            </Text>
+          </View>
+        ) : null}
+
+        {siteProfiles.map(({ site, backendData }) => {
           const selected = selectedSiteId === site.id;
+          const urgency = backendData?.recommendation.urgency;
+          const color = statusColor(urgency);
 
           return (
             <View key={site.id} style={styles.card}>
               <View style={styles.headerRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{site.name}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    {cropLabel(site.cropType)} · {site.locationLabel}
-                  </Text>
+                  <Text style={styles.cardSubtitle}>{site.locationLabel}</Text>
                 </View>
 
-                <View style={styles.headerActions}>
-                  <View
-                    style={[
-                      styles.pill,
-                      {
-                        backgroundColor: `${riskColor(recommendation.urgency)}15`,
-                        borderColor: `${riskColor(recommendation.urgency)}45`,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        { color: riskColor(recommendation.urgency) },
-                      ]}
-                    >
-                      {recommendation.riskBand}
-                    </Text>
-                  </View>
-
-                  {!isDefaultSite(site.id) ? (
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => handleRemoveSite(site)}
-                    >
-                      <Text style={styles.removeButtonText}>Remove</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                <View
+                  style={[
+                    styles.pill,
+                    {
+                      backgroundColor: `${color}15`,
+                      borderColor: `${color}45`,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.pillText, { color }]}>
+                    {urgency ?? "No status"}
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.twoCol}>
-                <InfoCard label="Environment" value={site.environment} />
                 <InfoCard label="Crop" value={cropLabel(site.cropType)} />
+                <InfoCard label="Environment" value={site.environment} />
               </View>
 
               <View style={styles.twoCol}>
@@ -465,51 +600,33 @@ export default function SitesScreen() {
               <View style={styles.twoCol}>
                 <InfoCard label="Irrigation" value={site.irrigationMethod} />
                 <InfoCard
-                  label="Sensors"
-                  value={
-                    site.connectedProbes
-                      ? `${site.connectedProbes} connected`
-                      : "Optional hardware tier"
-                  }
+                  label="Backend ID"
+                  value={`${site.id.slice(0, 8)}...`}
+                  subvalue="PostgreSQL"
                 />
-              </View>
-
-              <View style={styles.twoCol}>
-                <InfoCard
-                  label="Current weather"
-                  value={`${weather.current.temperatureC}°C`}
-                  subvalue={`Humidity ${weather.current.humidityPct}%`}
-                />
-                <InfoCard
-                  label="Today"
-                  value={`${weather.today.maxTempC}° / ${weather.today.minTempC}°`}
-                  subvalue={`${weather.today.precipitationMm} mm precipitation`}
-                />
-              </View>
-
-              <View style={styles.actionBox}>
-                <Text style={styles.actionLabel}>Current irrigation action</Text>
-                <Text style={styles.actionTitle}>{recommendation.actionLabel}</Text>
-                <Text style={styles.actionText}>{recommendation.summary}</Text>
-              </View>
-
-              <View style={styles.twoCol}>
-                <InfoCard label="Urgency" value={recommendation.urgency} />
-                <InfoCard label="Model score" value={`${recommendation.modelScore}%`} />
               </View>
 
               <TouchableOpacity
                 style={[styles.selectButton, selected && styles.selectButtonActive]}
                 onPress={() => setSelectedSiteId(site.id)}
               >
-                <Text
-                  style={[
-                    styles.selectButtonText,
-                    selected && styles.selectButtonTextActive,
-                  ]}
-                >
+                <Text style={styles.selectButtonText}>
                   {selected ? "Selected Site" : "Select Site"}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => fillFormFromSite(site)}
+              >
+                <Text style={styles.editButtonText}>Edit Site</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => handleRemoveSite(site)}
+              >
+                <Text style={styles.removeButtonText}>Remove Site</Text>
               </TouchableOpacity>
             </View>
           );
@@ -558,13 +675,17 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16,
   },
+  formHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 14,
-  },
-  headerActions: {
-    alignItems: "flex-end",
+    gap: 12,
   },
   cardTitle: {
     fontSize: 22,
@@ -619,29 +740,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: palette.muted,
     marginTop: 4,
-  },
-  actionBox: {
-    backgroundColor: "#F8FAFD",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
-  },
-  actionLabel: {
-    fontSize: 12,
-    color: palette.muted,
-    marginBottom: 6,
-    fontWeight: "600",
-  },
-  actionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: palette.ink,
-    marginBottom: 6,
-  },
-  actionText: {
-    fontSize: 14,
-    color: palette.muted,
-    lineHeight: 21,
   },
   inputLabel: {
     fontSize: 13,
@@ -724,20 +822,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  removeButton: {
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#FDECEC",
-    borderWidth: 1,
-    borderColor: "#F5C2C2",
-  },
-  removeButtonText: {
-    color: "#C43D3D",
-    fontSize: 12,
-    fontWeight: "700",
-  },
   selectButton: {
     marginTop: 6,
     backgroundColor: "#0B1830",
@@ -753,7 +837,67 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  selectButtonTextActive: {
-    color: "#FFFFFF",
+  editButton: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    alignItems: "center",
+  },
+  editButtonText: {
+    color: "#1D4ED8",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  cancelEditButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  cancelEditText: {
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  removeButton: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#FDECEC",
+    borderWidth: 1,
+    borderColor: "#F5C2C2",
+    alignItems: "center",
+  },
+  removeButtonText: {
+    color: "#C43D3D",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  errorBox: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#991B1B",
+    marginBottom: 6,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#991B1B",
+    lineHeight: 20,
+    marginBottom: 10,
   },
 });

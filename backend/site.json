@@ -1,0 +1,12 @@
+{
+  "name": "Test Greenhouse",
+  "locationLabel": "Waterloo, ON",
+  "latitude": 43.4723,
+  "longitude": -80.5449,
+  "areaHa": 0.025,
+  "cropType": "leafy-greens",
+  "environment": "greenhouse",
+  "irrigationMethod": "drip",
+  "soilType": "loam",
+  "connectedProbes": 0
+}
