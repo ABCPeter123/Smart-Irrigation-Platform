@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -616,6 +617,13 @@ export default function SitesScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={styles.detailButton}
+                onPress={() => router.push(`/site/${site.id}`)}
+              >
+                <Text style={styles.detailButtonText}>View Details</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => fillFormFromSite(site)}
               >
@@ -835,6 +843,21 @@ const styles = StyleSheet.create({
   selectButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
+    fontWeight: "700",
+  },
+  detailButton: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFD",
+    borderWidth: 1,
+    borderColor: "#D9E1EE",
+    alignItems: "center",
+  },
+  detailButtonText: {
+    color: "#0B1830",
+    fontSize: 14,
     fontWeight: "700",
   },
   editButton: {

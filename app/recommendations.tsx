@@ -14,9 +14,12 @@ import { useSiteContext } from "../src/context/SiteContext";
 import {
   BackendIrrigationLog,
   BackendRecommendationResponse,
+  BackendRecommendationSnapshot,
   createIrrigationLog,
   fetchBackendRecommendation,
   fetchIrrigationLogs,
+  fetchRecommendationSnapshots,
+  saveRecommendationSnapshot,
 } from "../src/services/api";
 
 function getUrgencyStyle(urgency: string) {
@@ -56,10 +59,16 @@ export default function RecommendationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loggingIrrigation, setLoggingIrrigation] = useState(false);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const [irrigationLogs, setIrrigationLogs] = useState<BackendIrrigationLog[]>(
     []
   );
+  const [snapshots, setSnapshots] = useState<BackendRecommendationSnapshot[]>(
+    []
+  );
+
   const [appliedMmInput, setAppliedMmInput] = useState("");
   const [logNotes, setLogNotes] = useState("");
 
@@ -71,6 +80,16 @@ export default function RecommendationsScreen() {
 
     const logs = await fetchIrrigationLogs(selectedSiteId);
     setIrrigationLogs(logs.slice(0, 7));
+  }, [selectedSiteId]);
+
+  const loadSnapshots = useCallback(async () => {
+    if (!selectedSiteId) {
+      setSnapshots([]);
+      return;
+    }
+
+    const result = await fetchRecommendationSnapshots(selectedSiteId);
+    setSnapshots(result.slice(0, 7));
   }, [selectedSiteId]);
 
   const loadRecommendation = useCallback(async () => {
@@ -89,13 +108,18 @@ export default function RecommendationsScreen() {
     try {
       setErrorMessage(null);
 
-      const result = await fetchBackendRecommendation(selectedSiteId);
-      const logs = await fetchIrrigationLogs(selectedSiteId);
+      const [recommendationResult, logsResult, snapshotResult] =
+        await Promise.all([
+          fetchBackendRecommendation(selectedSiteId),
+          fetchIrrigationLogs(selectedSiteId),
+          fetchRecommendationSnapshots(selectedSiteId),
+        ]);
 
-      setData(result);
-      setIrrigationLogs(logs.slice(0, 7));
+      setData(recommendationResult);
+      setIrrigationLogs(logsResult.slice(0, 7));
+      setSnapshots(snapshotResult.slice(0, 7));
 
-      const recommendedMm = result.recommendation.recommendedMm;
+      const recommendedMm = recommendationResult.recommendation.recommendedMm;
 
       if (recommendedMm > 0) {
         setAppliedMmInput(String(recommendedMm));
@@ -161,6 +185,33 @@ export default function RecommendationsScreen() {
       );
     } finally {
       setLoggingIrrigation(false);
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!data) {
+      return;
+    }
+
+    try {
+      setSavingSnapshot(true);
+
+      await saveRecommendationSnapshot(data.site.id);
+      await loadSnapshots();
+
+      Alert.alert(
+        "Snapshot saved",
+        "The current recommendation was saved to the backend history."
+      );
+    } catch (error) {
+      Alert.alert(
+        "Snapshot failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to save recommendation snapshot."
+      );
+    } finally {
+      setSavingSnapshot(false);
     }
   };
 
@@ -298,6 +349,42 @@ export default function RecommendationsScreen() {
           <Text style={styles.startByLabel}>Start by</Text>
           <Text style={styles.startByValue}>{recommendation.startBy}</Text>
         </View>
+
+        <Pressable
+          style={[styles.primaryButton, savingSnapshot && styles.disabledButton]}
+          onPress={handleSaveSnapshot}
+          disabled={savingSnapshot}
+        >
+          <Text style={styles.primaryButtonText}>
+            {savingSnapshot ? "Saving Snapshot..." : "Save Recommendation Snapshot"}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Recommendation History</Text>
+
+        {snapshots.length === 0 ? (
+          <Text style={styles.helperText}>
+            No recommendation snapshots have been saved for this site yet.
+          </Text>
+        ) : (
+          snapshots.map((snapshot) => (
+            <View key={snapshot.id} style={styles.historyRow}>
+              <Text style={styles.historyTitle}>
+                {snapshot.actionLabel} · {snapshot.urgency}
+              </Text>
+              <Text style={styles.historyTime}>
+                {new Date(snapshot.capturedAt).toLocaleString()}
+              </Text>
+              <Text style={styles.historyNotes}>
+                {snapshot.recommendedMm} mm ·{" "}
+                {snapshot.recommendedLitres.toLocaleString()} litres ·{" "}
+                {snapshot.modelScore}% score
+              </Text>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={styles.card}>
@@ -359,18 +446,15 @@ export default function RecommendationsScreen() {
         ) : (
           irrigationLogs.map((log) => (
             <View key={log.id} style={styles.historyRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyTitle}>
-                  {log.appliedMm} mm ·{" "}
-                  {log.appliedLitres.toLocaleString()} litres
-                </Text>
-                <Text style={styles.historyTime}>
-                  {new Date(log.performedAt).toLocaleString()}
-                </Text>
-                {log.notes ? (
-                  <Text style={styles.historyNotes}>{log.notes}</Text>
-                ) : null}
-              </View>
+              <Text style={styles.historyTitle}>
+                {log.appliedMm} mm · {log.appliedLitres.toLocaleString()} litres
+              </Text>
+              <Text style={styles.historyTime}>
+                {new Date(log.performedAt).toLocaleString()}
+              </Text>
+              {log.notes ? (
+                <Text style={styles.historyNotes}>{log.notes}</Text>
+              ) : null}
             </View>
           ))
         )}

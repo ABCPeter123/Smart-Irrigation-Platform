@@ -19,102 +19,161 @@ const siteSchema = z.object({
 
 const updateSiteSchema = siteSchema.partial();
 
-router.get("/", async (_req, res) => {
-  const sites = await prisma.site.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+function didLocationChange(input: {
+  existingLatitude: number;
+  existingLongitude: number;
+  nextLatitude?: number;
+  nextLongitude?: number;
+}) {
+  const latitudeChanged =
+    input.nextLatitude !== undefined &&
+    input.nextLatitude !== input.existingLatitude;
 
-  res.json(sites);
-});
+  const longitudeChanged =
+    input.nextLongitude !== undefined &&
+    input.nextLongitude !== input.existingLongitude;
 
-router.get("/:id", async (req, res) => {
-  const site = await prisma.site.findUnique({
-    where: { id: req.params.id },
-    include: {
-      irrigationLogs: {
-        orderBy: { performedAt: "desc" },
-        take: 10,
-      },
-      recommendationSnapshots: {
-        orderBy: { capturedAt: "desc" },
-        take: 10,
-      },
-      weatherCache: true,
-    },
-  });
+  return latitudeChanged || longitudeChanged;
+}
 
-  if (!site) {
-    res.status(404).json({ error: "Site not found" });
-    return;
-  }
-
-  res.json(site);
-});
-
-router.post("/", async (req, res) => {
-  const parsed = siteSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "Invalid site payload",
-      details: parsed.error.flatten(),
+router.get("/", async (_req, res, next) => {
+  try {
+    const sites = await prisma.site.findMany({
+      orderBy: { createdAt: "desc" },
     });
-    return;
+
+    res.json(sites);
+  } catch (error) {
+    next(error);
   }
-
-  const site = await prisma.site.create({
-    data: {
-      connectedProbes: 0,
-      ...parsed.data,
-    },
-  });
-
-  res.status(201).json(site);
 });
 
-router.patch("/:id", async (req, res) => {
-  const parsed = updateSiteSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "Invalid site update payload",
-      details: parsed.error.flatten(),
+router.get("/:id", async (req, res, next) => {
+  try {
+    const site = await prisma.site.findUnique({
+      where: { id: req.params.id },
+      include: {
+        irrigationLogs: {
+          orderBy: { performedAt: "desc" },
+          take: 10,
+        },
+        recommendationSnapshots: {
+          orderBy: { capturedAt: "desc" },
+          take: 10,
+        },
+        weatherCache: true,
+      },
     });
-    return;
+
+    if (!site) {
+      res.status(404).json({ error: "Site not found" });
+      return;
+    }
+
+    res.json(site);
+  } catch (error) {
+    next(error);
   }
-
-  const existing = await prisma.site.findUnique({
-    where: { id: req.params.id },
-  });
-
-  if (!existing) {
-    res.status(404).json({ error: "Site not found" });
-    return;
-  }
-
-  const updated = await prisma.site.update({
-    where: { id: req.params.id },
-    data: parsed.data,
-  });
-
-  res.json(updated);
 });
 
-router.delete("/:id", async (req, res) => {
-  const existing = await prisma.site.findUnique({
-    where: { id: req.params.id },
-  });
+router.post("/", async (req, res, next) => {
+  try {
+    const parsed = siteSchema.safeParse(req.body);
 
-  if (!existing) {
-    res.status(404).json({ error: "Site not found" });
-    return;
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid site payload",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const site = await prisma.site.create({
+      data: {
+        connectedProbes: 0,
+        ...parsed.data,
+      },
+    });
+
+    res.status(201).json(site);
+  } catch (error) {
+    next(error);
   }
+});
 
-  await prisma.site.delete({
-    where: { id: req.params.id },
-  });
+router.patch("/:id", async (req, res, next) => {
+  try {
+    const parsed = updateSiteSchema.safeParse(req.body);
 
-  res.status(204).send();
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid site update payload",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+
+    const existing = await prisma.site.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Site not found" });
+      return;
+    }
+
+    const locationChanged = didLocationChange({
+      existingLatitude: existing.latitude,
+      existingLongitude: existing.longitude,
+      nextLatitude: parsed.data.latitude,
+      nextLongitude: parsed.data.longitude,
+    });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedSite = await tx.site.update({
+        where: { id: req.params.id },
+        data: parsed.data,
+      });
+
+      if (locationChanged) {
+        await tx.weatherCache.deleteMany({
+          where: {
+            siteId: req.params.id,
+          },
+        });
+      }
+
+      return updatedSite;
+    });
+
+    res.json({
+      ...updated,
+      weatherCacheInvalidated: locationChanged,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const existing = await prisma.site.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Site not found" });
+      return;
+    }
+
+    await prisma.site.delete({
+      where: { id: req.params.id },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

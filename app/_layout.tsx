@@ -1,5 +1,5 @@
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 import { SiteProvider } from "../src/context/SiteContext";
 
 export default function RootLayout() {
@@ -29,6 +29,7 @@ export default function RootLayout() {
             ),
           }}
         />
+
         <Tabs.Screen
           name="recommendations"
           options={{
@@ -38,6 +39,7 @@ export default function RootLayout() {
             ),
           }}
         />
+
         <Tabs.Screen
           name="weather"
           options={{
@@ -47,6 +49,7 @@ export default function RootLayout() {
             ),
           }}
         />
+
         <Tabs.Screen
           name="sites"
           options={{
@@ -56,6 +59,7 @@ export default function RootLayout() {
             ),
           }}
         />
+
         <Tabs.Screen
           name="settings"
           options={{
@@ -63,6 +67,17 @@ export default function RootLayout() {
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="settings-outline" size={size} color={color} />
             ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="site/[id]"
+          options={{
+            title: "Site Detail",
+            href: null,
+            tabBarStyle: {
+              display: "none",
+            },
           }}
         />
       </Tabs>

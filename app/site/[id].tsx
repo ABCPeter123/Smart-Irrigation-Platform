@@ -12,7 +12,7 @@ import {
   API_BASE_URL,
   BackendHealthResponse,
   checkBackendHealth,
-} from "../src/services/api";
+} from "../../src/services/api";
 
 const palette = {
   bg: "#F3F6FB",

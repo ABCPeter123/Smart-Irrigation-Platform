@@ -1,4 +1,10 @@
-const API_BASE_URL = "http://10.0.0.184:4000";
+export const API_BASE_URL = "http://10.0.0.184:4000";
+
+export type BackendHealthResponse = {
+  status: string;
+  service: string;
+  timestamp: string;
+};
 
 export type BackendRecommendationResponse = {
   site: {
@@ -87,11 +93,16 @@ async function request<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export async function checkBackendHealth() {
+  return request<BackendHealthResponse>("/api/health");
+}
+
 export async function fetchBackendRecommendation(siteId: string) {
   return request<BackendRecommendationResponse>(
-    `/api/recommendations/site/${siteId}`
+    `/api/recommendations/site/${encodeURIComponent(siteId)}`
   );
 }
+
 export type BackendSite = {
   id: string;
   name: string;
@@ -145,6 +156,26 @@ export async function createBackendSite(payload: CreateBackendSitePayload) {
   return response.json() as Promise<BackendSite>;
 }
 
+export async function updateBackendSite(
+  siteId: string,
+  payload: Partial<CreateBackendSitePayload>
+) {
+  const response = await fetch(`${API_BASE_URL}/api/sites/${siteId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Update site failed: ${response.status} ${errorText}`);
+  }
+
+  return response.json() as Promise<BackendSite>;
+}
+
 export async function deleteBackendSite(siteId: string) {
   const response = await fetch(`${API_BASE_URL}/api/sites/${siteId}`, {
     method: "DELETE",
@@ -184,7 +215,9 @@ export async function createIrrigationLog(payload: CreateIrrigationLogPayload) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Create irrigation log failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `Create irrigation log failed: ${response.status} ${errorText}`
+    );
   }
 
   return response.json() as Promise<BackendIrrigationLog>;
@@ -194,26 +227,6 @@ export async function fetchIrrigationLogs(siteId: string) {
   return request<BackendIrrigationLog[]>(
     `/api/irrigation-logs?siteId=${encodeURIComponent(siteId)}`
   );
-}
-
-export async function updateBackendSite(
-  siteId: string,
-  payload: Partial<CreateBackendSitePayload>
-) {
-  const response = await fetch(`${API_BASE_URL}/api/sites/${siteId}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Update site failed: ${response.status} ${errorText}`);
-  }
-
-  return response.json() as Promise<BackendSite>;
 }
 
 export type BackendWeatherBundle = {
@@ -258,5 +271,51 @@ export type BackendWeatherBundle = {
 export async function fetchBackendWeather(siteId: string) {
   return request<BackendWeatherBundle>(
     `/api/weather/site/${encodeURIComponent(siteId)}`
+  );
+}
+
+export type BackendRecommendationSnapshot = {
+  id: string;
+  siteId: string;
+  headline: string;
+  actionLabel: string;
+  startBy: string;
+  urgency: "Low" | "Medium" | "High";
+  riskBand: "Low" | "Moderate" | "Elevated" | "High";
+  recommendedMm: number;
+  recommendedLitres: number;
+  modelScore: number;
+  summary: string;
+  reasonsJson: string;
+  capturedAt: string;
+  reasons?: string[];
+};
+
+export async function saveRecommendationSnapshot(siteId: string) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/recommendations/site/${encodeURIComponent(
+      siteId
+    )}/snapshot`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Save recommendation snapshot failed: ${response.status} ${errorText}`
+    );
+  }
+
+  return response.json() as Promise<{
+    snapshot: BackendRecommendationSnapshot;
+    recommendation: BackendRecommendationResponse["recommendation"];
+  }>;
+}
+
+export async function fetchRecommendationSnapshots(siteId: string) {
+  return request<BackendRecommendationSnapshot[]>(
+    `/api/recommendations/site/${encodeURIComponent(siteId)}/snapshots`
   );
 }
