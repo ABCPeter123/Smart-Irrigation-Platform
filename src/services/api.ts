@@ -1,4 +1,4 @@
-export const API_BASE_URL = "http://10.0.0.184:4000";
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:4000").replace(/\/$/, "");
 
 export type BackendHealthResponse = {
   status: string;
