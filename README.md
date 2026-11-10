@@ -2,35 +2,35 @@
 
 The Vercel web dashboard is deployed independently from the Express API and Python ETL.
 
-**Public API**: A second Vercel project builds from the repository's \`backend/\` root. Production mode exposes \`GET /api/health\` and \`GET /api/public/pipeline\` only. Legacy unauthenticated CRUD routes remain available for local development but are deliberately absent in production.
+**Public API**: A second Vercel project builds from the repository's `backend/` root. Production mode exposes `GET /api/health` and `GET /api/public/pipeline` only. Legacy unauthenticated CRUD routes remain available for local development but are deliberately absent in production.
 
 **PostgreSQL**: Provision a managed PostgreSQL instance (for example Neon) in the same or a nearby region as the API. Use a pooled connection string for the serverless API and a direct connection string for migrations and the ETL runner. Keep them in provider-managed secret settings, never in the repository.
 
-**Migration and initial data**: The separate Python pipeline uses \`backend/data_pipeline/sql/001_pipeline_tables.sql\`. It creates its own tables, adds an idempotent unique index, and seeds illustrative public demo farms if the pipeline table is empty. Existing Prisma-based mobile tables are separate: apply \`npx prisma migrate deploy\` from \`backend/\` only if those native app tables are needed. Run migrations against an empty or carefully reviewed database, not an unknown production database with existing rows.
+**Migration and initial data**: The separate Python pipeline uses `backend/data_pipeline/sql/001_pipeline_tables.sql`. It creates its own tables, adds an idempotent unique index, and seeds illustrative public demo farms if the pipeline table is empty. Existing Prisma-based mobile tables are separate: apply `npx prisma migrate deploy` from `backend/` only if those native app tables are needed. Run migrations against an empty or carefully reviewed database, not an unknown production database with existing rows.
 
-**Pipeline execution**: In GitHub, create a protected environment called \`irrigation-pipeline\` and add \`PIPELINE_DATABASE_URL\` as an encrypted environment secret. Run \`Run irrigation ETL (manual)\` once from the Actions tab to validate its full flow. The workflow is intentionally manual until the database is connected, tested, and approved for scheduled runs.
+**Pipeline execution**: In GitHub, create a protected environment called `irrigation-pipeline` and add `PIPELINE_DATABASE_URL` as an encrypted environment secret. Run `Run irrigation ETL (manual)` once from the Actions tab to validate its full flow. The workflow is intentionally manual until the database is connected, tested, and approved for scheduled runs.
 
-**Public provenance**: Only demo IDs beginning with \`demo-\` are returned by the public API. Exposed features are limited to modeled recommendations, location labels, and high-level metrics. "Data completeness" is not prediction confidence. Actual sensors are not connected. The public web dashboard currently runs its own weather-driven demonstration until the database connection and API UI are validated.
+**Public provenance**: Only demo IDs beginning with `demo-` are returned by the public API. Exposed features are limited to modeled recommendations, location labels, and high-level metrics. "Data completeness" is not prediction confidence. Actual sensors are not connected. The public web dashboard currently runs its own weather-driven demonstration until the database connection and API UI are validated.
 
 ### Verify the backend locally
 
-\`\`\`bash
+```bash
 cd backend
 npm ci
 npm run build
 npm run test:api
 npm run dev
-\`\`\`
+```
 
 ### Run the pipeline in a configured environment
 
-\`\`\`bash
+```bash
 cd backend/data_pipeline
 python -m pip install -r requirements.txt
 python run_pipeline.py
-\`\`\`
+```
 
-The pipeline reads the \`DATABASE_URL\` environment variable. No database credentials belong in the codebase.
+The pipeline reads the `DATABASE_URL` environment variable. No database credentials belong in the codebase.
 
 ---
 
