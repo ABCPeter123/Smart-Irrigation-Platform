@@ -11,7 +11,7 @@ export const app = express();
 app.disable("x-powered-by");
 app.use(cors({
   origin: env.clientOrigin === "*" ? true : env.clientOrigin,
-  methods: ["GET", "HEAD", "OPTIONS"],
+  methods: env.publicReadOnly ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
 }));
 app.use(express.json({ limit: "32kb" }));
 
