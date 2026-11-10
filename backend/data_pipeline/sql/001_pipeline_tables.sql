@@ -142,3 +142,6 @@ ON site_features_daily(site_id, feature_date);
 
 CREATE INDEX IF NOT EXISTS idx_recommendations_site_generated
 ON irrigation_recommendations(site_id, generated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recommendations_site_date
+ON irrigation_recommendations(site_id, recommendation_date);
