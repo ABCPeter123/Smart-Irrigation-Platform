@@ -126,7 +126,9 @@ CREATE TABLE IF NOT EXISTS irrigation_recommendations (
     model_version TEXT NOT NULL,
 
     reasons JSONB NOT NULL,
-    input_features JSONB NOT NULL
+    input_features JSONB NOT NULL,
+
+    UNIQUE(site_id, recommendation_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_forecast_site_date
