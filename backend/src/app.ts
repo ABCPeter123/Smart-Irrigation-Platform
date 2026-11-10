@@ -4,35 +4,46 @@ import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import healthRoutes from "./routes/health.routes";
-import irrigationLogsRoutes from "./routes/irrigationLogs.routes";
-import recommendationInputsRoutes from "./routes/recommendationInputs.routes";
-import recommendationsRoutes from "./routes/recommendations.routes";
-import sitesRoutes from "./routes/sites.routes";
-import weatherRoutes from "./routes/weather.routes";
+import publicPipelineRoutes from "./routes/publicPipeline.routes";
 
+// Public deployments expose read-only endpoints only.
 export const app = express();
-
-app.use(
-  cors({
-    origin: env.clientOrigin === "*" ? true : env.clientOrigin,
-  })
-);
-
-app.use(express.json());
+app.disable("x-powered-by");
+app.use(cors({
+  origin: env.clientOrigin === "*" ? true : env.clientOrigin,
+  methods: ["GET", "HEAD", "OPTIONS"],
+}));
+app.use(express.json({ limit: "32kb" }));
 
 app.get("/", (_req, res) => {
   res.json({
-    name: "Northern Irrigation Backend",
-    version: "1.0.0",
+    name: "Smart Irrigation API",
+    version: "2.0.0",
+    mode: env.publicReadOnly ? "public-read-only" : "local-development",
   });
 });
 
 app.use("/api/health", healthRoutes);
-app.use("/api/sites", sitesRoutes);
-app.use("/api/irrigation-logs", irrigationLogsRoutes);
-app.use("/api/weather", weatherRoutes);
-app.use("/api/recommendation-inputs", recommendationInputsRoutes);
-app.use("/api/recommendations", recommendationsRoutes);
+app.use("/api/public", publicPipelineRoutes);
+
+if (!env.publicReadOnly) {
+  // The existing mobile CRUD API stays available for local development.
+  // Never expose its unauthenticated mutations in a public deployment.
+  const irrigationLogsRoutes = require("./routes/irrigationLogs.routes").default;
+  const recommendationInputsRoutes = require("./routes/recommendationInputs.routes").default;
+  const recommendationsRoutes = require("./routes/recommendations.routes").default;
+  const sitesRoutes = require("./routes/sites.routes").default;
+  const weatherRoutes = require("./routes/weather.routes").default;
+
+  app.use("/api/sites", sitesRoutes);
+  app.use("/api/irrigation-logs", irrigationLogsRoutes);
+  app.use("/api/weather", weatherRoutes);
+  app.use("/api/recommendation-inputs", recommendationInputsRoutes);
+  app.use("/api/recommendations", recommendationsRoutes);
+}
 
 app.use(notFound);
 app.use(errorHandler);
+
+// Express on Vercel uses the default-exported application.
+export default app;
