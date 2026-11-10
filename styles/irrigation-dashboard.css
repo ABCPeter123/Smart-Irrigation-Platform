@@ -256,3 +256,117 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
  .ir-bottom-grid .ir-panel{min-height:unset}
  .ir-top-select select{max-width:116px}
 }
+
+
+/* Web interaction fixes: Expo Router embeds this page in a fixed-height
+   navigation screen. Make the actual dashboard the scroll container. */
+.ir-site {
+  width:100%;
+  height:100vh;
+  height:100dvh;
+  max-height:100dvh;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-color:#b9c8bc #f1f4f1;
+}
+.ir-site .ir-topbar {position:sticky;top:0;z-index:40}
+.ir-site button {appearance:none;-webkit-appearance:none}
+.ir-topbar-actions{min-width:0;display:flex;align-items:center;gap:10px}
+.ir-farm-picker {position:relative;flex:0 1 auto;min-width:0}
+.ir-farm-trigger {
+  display:flex;align-items:center;gap:9px;
+  height:38px;max-width:248px;min-width:140px;padding:0 12px;
+  border:1px solid #507461;border-radius:7px;
+  background:#254b3b;color:#f1f8f1;font-size:12px;
+  font-weight:600;cursor:pointer;text-align:left;transition:background .15s,border-color .15s;
+}
+.ir-farm-trigger:hover,.ir-farm-trigger[aria-expanded=true]{background:#305943;border-color:#79a48a}
+.ir-pin-icon {flex:none;opacity:.8}
+.ir-farm-trigger-label {min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ir-chevron {flex:none;margin-left:auto;opacity:.75;transition:transform .16s}
+.ir-farm-trigger[aria-expanded=true] .ir-chevron{transform:rotate(180deg)}
+.ir-farm-menu {
+  position:absolute;z-index:80;right:0;top:calc(100% + 8px);
+  width:min(288px,calc(100vw - 24px));padding:7px;
+  background:#fff;color:#253d2e;border:1px solid #d8e4dc;
+  border-radius:10px;box-shadow:0 16px 40px rgba(19,46,31,.2);
+}
+.ir-farm-menu-heading {display:block;font-size:10px;font-weight:700;color:#809489;letter-spacing:1px;padding:9px 11px 7px}
+.ir-farm-option {display:flex;justify-content:space-between;align-items:center;gap:12px;
+  width:100%;padding:10px 11px;border:0;border-radius:7px;background:transparent;
+  color:#294230;text-align:left;cursor:pointer}
+.ir-farm-option:hover,.ir-farm-option:focus-visible{background:#edf5ef}
+.ir-farm-option.is-selected{background:#eaf4eb;color:#267143}
+.ir-farm-option svg{flex:none}
+.ir-option-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ir-option-text strong{font-size:12px;font-weight:700}
+.ir-option-text small{font-size:11px;color:#7c9081;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ir-days-switch {
+  display:flex;align-items:center;gap:3px;
+  flex:none;height:38px;padding:3px;background:#244839;border:1px solid #507461;border-radius:7px;
+}
+.ir-days-switch button{height:30px;min-width:61px;padding:0 10px;color:#d1e0d5;
+  border:1px solid transparent;background:transparent;border-radius:5px;
+  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.ir-days-switch button:hover:not(.is-selected){background:#365d49}
+.ir-days-switch button.is-selected{color:#204c32;background:#e2eee3;border-color:#e2eee3}
+.ir-days-short{display:none}
+.ir-site .ir-farm-trigger:focus-visible,.ir-site .ir-days-switch button:focus-visible,
+.ir-site .ir-farm-option:focus-visible{outline:3px solid #efce77;outline-offset:2px}
+.ir-controls input[type=range].ir-range-input{
+  display:block;width:100%;height:6px;margin-top:11px;margin-bottom:24px;
+  padding:0;border:0;border-radius:999px;cursor:pointer;
+  appearance:none;-webkit-appearance:none;box-shadow:none;
+}
+.ir-controls input[type=range].ir-range-input::-webkit-slider-runnable-track{
+  height:6px;border:0;border-radius:999px;background:transparent
+}
+.ir-controls input[type=range].ir-range-input::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;
+  border:3px solid #fff;border-radius:50%;background:#438961;
+  box-shadow:0 0 0 1px #438961,0 2px 5px rgba(19,50,30,.22);
+}
+.ir-controls input[type=range].ir-range-input::-moz-range-track{
+  height:6px;background:transparent;border:0;border-radius:999px
+}
+.ir-controls input[type=range].ir-range-input::-moz-range-thumb{
+  width:12px;height:12px;border:3px solid #fff;border-radius:50%;background:#438961;
+  box-shadow:0 0 0 1px #438961,0 2px 5px rgba(19,50,30,.22);
+}
+.ir-controls input[type=range].ir-range-input:focus-visible{outline:3px solid #efce77;outline-offset:7px}
+.ir-controls input[type=range].ir-range-input:disabled{cursor:not-allowed;opacity:.4}
+.ir-weather-foot button,.ir-reset {display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.ir-weather-foot button{height:34px;min-width:94px}
+.ir-reset{height:37px}
+.ir-button-icon{flex:none}
+@media(max-width:900px){
+ .ir-farm-trigger{max-width:195px;min-width:115px}
+ .ir-farm-trigger-label{max-width:132px}
+ .ir-days-switch button{min-width:55px;padding:0 8px}
+}
+@media(max-width:740px){
+ .ir-site .ir-topbar-inner{min-height:62px}
+ .ir-site .ir-brand strong{display:none}
+ .ir-site .ir-topbar-actions{max-width:none}
+ .ir-farm-trigger{height:36px;min-width:105px}
+ .ir-days-switch{height:36px}
+ .ir-days-switch button{height:28px;min-width:43px;padding:0 7px}
+ .ir-days-long{display:none}
+ .ir-days-short{display:inline}
+}
+@media(max-width:420px){
+ .ir-site .ir-brand{font-size:15px;gap:6px}
+ .ir-site .ir-logo{height:27px;width:27px}
+ .ir-site .ir-topbar-inner{gap:6px;padding:9px 10px}
+ .ir-site .ir-topbar-actions{gap:6px}
+ .ir-farm-trigger{max-width:136px;min-width:92px;padding:0 7px;gap:5px;font-size:11px}
+ .ir-farm-trigger-label{max-width:84px}
+ .ir-pin-icon{width:14px}
+ .ir-chevron{width:13px}
+ .ir-days-switch button{min-width:35px;padding:0 5px;font-size:11px}
+ .ir-farm-menu{right:-74px}
+}
+@media(prefers-reduced-motion:reduce){.ir-chevron,.ir-farm-trigger{transition:none}}
