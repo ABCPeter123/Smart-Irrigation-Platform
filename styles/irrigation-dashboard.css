@@ -113,3 +113,16 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
 .ir-demo-tag{white-space:normal;text-align:center;line-height:1.5}
 .ir-stress-col{min-width:0}
 @media(max-width:550px){.ir-weather-foot{padding:4px 16px 15px}.ir-weather-icon{font-size:24px}.ir-weather-day{gap:4px}.ir-weather-day small{font-size:10px}.ir-demo-tag{text-align:left}.ir-chart-legend span{white-space:normal}.ir-status{white-space:normal}}
+
+/* Optional read-only Python ETL snapshots: rendered only when records exist. */
+.ir-pipeline-panel{margin-top:20px}
+.ir-pipeline-panel .ir-panel-heading p{color:#8a9c90;margin:6px 0 0;font-size:12px}
+.ir-pipeline-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px;padding:18px}
+.ir-pipeline-item{background:linear-gradient(140deg,#f7faf5,#f0f6ef);border:1px solid #e0ebde;padding:18px;border-radius:12px;min-width:0}
+.ir-pipeline-top{display:flex;align-items:start;justify-content:space-between;gap:12px}
+.ir-pipeline-top strong{font-size:14px;color:#263e31}
+.ir-pipeline-top .ir-small-tag{font-size:9px;text-align:right}
+.ir-pipeline-value{margin:15px 0 3px;color:#316d48;font:800 clamp(23px,2.5vw,32px) Manrope,system-ui,sans-serif;letter-spacing:-.8px}
+.ir-pipeline-item p{color:#617e69;margin:0 0 17px;font-size:12px}
+.ir-pipeline-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:11px;border-top:1px solid #d9e8da;font-size:10px;color:#708978}
+.ir-pipeline-note{padding:0 18px 17px;margin:0;font-size:11px;color:#7d9382;line-height:1.6}
