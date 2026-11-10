@@ -5,6 +5,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/pipeline",
+      "destination": "https://smart-irrigation-api-one.vercel.app/api/public/pipeline"
+    },
+    {
       "source": "/:path*",
       "destination": "/"
     }
