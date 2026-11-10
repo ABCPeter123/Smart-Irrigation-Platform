@@ -88,8 +88,8 @@ export async function fetchPublicWeather(
 
   const daily = body.daily;
   const dates = daily?.time;
-  if (!Array.isArray(dates) || dates.length < 7) {
-    throw new Error("Weather service returned fewer than seven forecast days.");
+  if (!Array.isArray(dates) || dates.length < 14) {
+    throw new Error("Weather service returned fewer than fourteen forecast days.");
   }
 
   const mapped = dates.slice(0, 14).map((date: unknown, index: number) => {
