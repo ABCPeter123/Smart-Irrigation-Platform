@@ -1,7 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchPublicWeather, sampleWeather, weatherEmoji, type PublicWeather } from "../src/services/publicWeather.web";
 import { calculateScenario, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
+
 import "../styles/irrigation-dashboard.css";
+
+type PipelinePreviewRow = {
+  id: string;
+  name: string;
+  urgency: string | null;
+  forecastDate: string | null;
+  recommendedMm: number | null;
+  estimatedLitres: number | null;
+  dataCompletenessPct: number | null;
+  modelVersion: string | null;
+};
+type PipelinePreview = { status: string; records?: PipelinePreviewRow[] };
+
 
 const FIELDS = DEMO_FIELDS;
 const round = (x: number) => Math.round(x * 10) / 10;
@@ -79,6 +93,7 @@ export default function IrrigationWebDashboard() {
   const [weatherStatus, setWeatherStatus] = useState<"loading" | "live" | "sample">("loading");
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [pipelineRecords, setPipelineRecords] = useState<PipelinePreviewRow[]>([]);
 
   const field: DemoField = FIELDS.find(f => f.id === fieldId) ?? FIELDS[0];
   const sample = useMemo(() => sampleWeather(), []);
@@ -105,6 +120,21 @@ export default function IrrigationWebDashboard() {
       });
     return () => controller.abort();
   }, [field.id, refreshCounter]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/pipeline", { signal: controller.signal })
+      .then(response => response.ok ? response.json() as Promise<PipelinePreview> : null)
+      .then(data => {
+        if (!controller.signal.aborted && data?.status === "ready" && Array.isArray(data.records)) {
+          setPipelineRecords(data.records.slice(0, 20));
+        }
+      })
+      .catch(() => {
+        // The Python data pipeline is optional. Keep the public demo usable.
+      });
+    return () => controller.abort();
+  }, []);
 
   const scenario = useMemo(
     () => calculateScenario({
@@ -201,6 +231,28 @@ export default function IrrigationWebDashboard() {
             </div>
           </div>
         </div>
+        {pipelineRecords.length > 0 ? (
+          <section className="ir-panel ir-pipeline-panel">
+            <div className="ir-panel-heading">
+              <div><h2>Python data pipeline</h2><p>Latest stored model snapshots for public demonstration sites</p></div>
+              <span className="ir-small-tag">POSTGRESQL · ETL</span>
+            </div>
+            <div className="ir-pipeline-grid">
+              {pipelineRecords.map(record => (
+                <article key={record.id} className="ir-pipeline-item">
+                  <div className="ir-pipeline-top">
+                    <strong>{record.name}</strong>
+                    <span className="ir-small-tag">{record.urgency ? record.urgency.toUpperCase() + " PRIORITY" : "PENDING"}</span>
+                  </div>
+                  <div className="ir-pipeline-value">{record.recommendedMm === null ? "Pending" : record.recommendedMm.toFixed(1) + " mm"}</div>
+                  <p>{record.estimatedLitres === null ? "No estimate stored" : Math.round(record.estimatedLitres).toLocaleString() + " L modeled"}</p>
+                  <div className="ir-pipeline-meta"><span>{record.forecastDate ?? "No model date"}</span><span>{record.dataCompletenessPct === null ? "Completeness unknown" : Math.round(record.dataCompletenessPct) + "% input completeness"}</span></div>
+                </article>
+              ))}
+            </div>
+            <p className="ir-pipeline-note">Stored outputs use the Python feature-store model. They are separate from the interactive soil-moisture scenario and are not based on live sensor readings.</p>
+          </section>
+        ) : null}
         <footer className="ir-footer"><span>Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · Scenario outputs are illustrative, not agronomic advice.</span><span>Built by Peter Pu · <a href="https://github.com/ABCPeter123/Smart-Irrigation-Platform" target="_blank" rel="noreferrer">Source code ↗</a></span></footer>
       </main>
     </div>
