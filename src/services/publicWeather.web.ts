@@ -31,7 +31,7 @@ type OpenMeteoData = {
     time?: unknown;
     temperature_2m_max?: unknown;
     temperature_2m_min?: unknown;
-    precipitation_sum?: unknown;
+    rain_sum?: unknown;
     precipitation_probability_max?: unknown;
     et0_fao_evapotranspiration?: unknown;
     weather_code?: unknown;
@@ -66,7 +66,7 @@ export async function fetchPublicWeather(
     daily: [
       "temperature_2m_max",
       "temperature_2m_min",
-      "precipitation_sum",
+      "rain_sum",
       "precipitation_probability_max",
       "et0_fao_evapotranspiration",
       "weather_code",
@@ -100,7 +100,7 @@ export async function fetchPublicWeather(
       date,
       highC: numericValue(daily?.temperature_2m_max, index, "high temperature"),
       lowC: numericValue(daily?.temperature_2m_min, index, "low temperature"),
-      precipitationMm: Math.max(0, numericValue(daily?.precipitation_sum, index, "precipitation")),
+      precipitationMm: Math.max(0, numericValue(daily?.rain_sum, index, "rainfall")),
       rainChancePct: Math.max(0, Math.min(100, numericValue(daily?.precipitation_probability_max, index, "rain probability"))),
       et0Mm: Math.max(0, numericValue(daily?.et0_fao_evapotranspiration, index, "reference evapotranspiration")),
       weatherCode: numericValue(daily?.weather_code, index, "weather code"),
