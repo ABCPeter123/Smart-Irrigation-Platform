@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchPublicWeather, sampleWeather, weatherEmoji, type PublicWeather } from "../src/services/publicWeather.web";
+import { fetchPublicWeather, sampleWeather, type PublicWeather } from "../src/services/publicWeather.web";
 import { calculateScenario, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
 
 import "../styles/irrigation-dashboard.css";
@@ -19,6 +19,26 @@ type PipelinePreview = { status: string; records?: PipelinePreviewRow[] };
 
 const FIELDS = DEMO_FIELDS;
 const round = (x: number) => Math.round(x * 10) / 10;
+function WeatherGlyph({ code }: { code: number }) {
+  const cloudy = code >= 1 && code <= 3;
+  const rainy = code >= 51 && code <= 67;
+  const snowy = code >= 71 && code <= 86;
+  const storm = code >= 95;
+  const overcast = code >= 45 && code <= 48;
+  const showCloud = cloudy || rainy || snowy || storm || overcast;
+  return (
+    <svg viewBox="0 0 48 48" role="img" aria-label={code===0?"Sunny":rainy?"Rainy":snowy?"Snowy":storm?"Stormy":overcast?"Foggy":"Partly cloudy"} className="ir-weather-glyph">
+      {!overcast && <g fill="none" stroke="#e4ad43" strokeWidth="2.5" strokeLinecap="round">
+        <circle cx="17" cy="17" r="7" fill="#f4c75e" stroke="none"/>
+        <path d="M17 4V7 M17 27V30 M4 17H7 M27 17H30 M8 8L10.5 10.5 M25 25L27.5 27.5 M8 26L10.5 23.5 M25 10.5L27.5 8" />
+      </g>}
+      {showCloud && <path d="M13 33h22c6 0 8-8 3-11-1.9-1.4-4.5-1.3-6-.7-2-8-13-9-17-1.9C8 18.5 4 27 9 31.5c1 1 2.5 1.5 4 1.5Z" fill="#d4e1e9" stroke="#7d9ba9" strokeWidth="1.5" />}
+      {rainy && <path d="M15 37l-2 5 M25 37l-2 5 M35 37l-2 5" stroke="#519ac1" strokeWidth="2.8" strokeLinecap="round"/>}
+      {snowy && <g fill="#72a5c4"><circle cx="15" cy="39" r="2"/><circle cx="25" cy="40" r="2"/><circle cx="35" cy="39" r="2"/></g>}
+      {storm && <path d="M26 34l-6 7h6l-2 5 9-10h-6l2-4" fill="#e9b43d"/>}
+    </svg>
+  );
+}
 const dayName = (i: number) => i === 0 ? "today" : i === 1 ? "tomorrow" : "day " + (i + 1);
 const calendarLabel = (date: string) =>
   new Date(date + "T12:00:00Z").toLocaleDateString("en-CA", { weekday: "short", timeZone: "UTC" }).toUpperCase();
@@ -166,26 +186,26 @@ export default function IrrigationWebDashboard() {
       </header>
       <main className="ir-shell">
         <div className="ir-heading">
-          <div><span className="ir-eyebrow">PRECISION AGRICULTURE / INTERACTIVE DEMO</span><h1>Field intelligence, <em>made actionable.</em></h1><p>Explore how weather, moisture, and irrigation decisions affect a field over time.</p></div>
-          <div className="ir-demo-tag" aria-live="polite"><span className="ir-demo-dot"></span> {weatherStatus === "live" ? "Live weather · Modeled soil" : weatherStatus === "loading" ? "Loading live weather · Sample preview" : "Sample weather · Modeled soil"}</div>
+          <div className="ir-heading-copy"><span className="ir-eyebrow">SMART AGRICULTURE / FIELD DASHBOARD</span><h1>Irrigation overview</h1><p>Monitor forecast conditions, explore water use, and compare irrigation scenarios.</p></div>
+          <div className="ir-demo-tag" aria-live="polite"><span className="ir-demo-dot"></span> {weatherStatus === "live" ? "Live weather / Simulated soil" : weatherStatus === "loading" ? "Fetching weather" : "Sample weather / Simulated soil"}</div>
         </div>
         <div className="ir-dashboard-grid">
           <aside className="ir-side">
             <section className="ir-panel">
               <div className="ir-panel-heading"><h2>Field overview</h2><span className="ir-small-tag">01 / FIELD</span></div>
               <div className="ir-panel-pad">
-                <div className="ir-farm-image" role="img" aria-label="Illustration of agricultural fields from above">
+                <div className="ir-farm-image" role="img" aria-label="Illustrative farm landscape photo with a highlighted field boundary">
                   <div className="ir-farm-grid"></div>
                   <div className="ir-farm-boundary"><span className="ir-map-pin">●</span></div>
-                  <div className="ir-farm-caption"><span className="ir-live-dot"></span> {field.name}</div>
+                  <div className="ir-farm-caption"><span className="ir-location-dot"></span> {field.name}</div>
                 </div>
-                <div className="ir-field-meta"><div><small>LOCATION</small><strong>{field.location}</strong></div><div><small>CROP</small><strong>{field.crop}</strong></div><div><small>FIELD AREA</small><strong>{field.areaHa.toFixed(2)} ha</strong></div><div><small>STARTING MOISTURE</small><strong>{startingMoisturePct}% assumed</strong></div></div>
+                <div className="ir-field-meta"><div><small>LOCATION</small><strong>{field.location}</strong></div><div><small>CROP</small><strong>{field.crop}</strong></div><div><small>FIELD AREA</small><strong>{field.areaHa.toFixed(2)} ha</strong></div><div><small>STARTING MOISTURE</small><strong>{startingMoisturePct}% <span className="ir-assumed">assumed</span></strong></div></div>
               </div>
             </section>
             <section className="ir-panel">
               <div className="ir-panel-heading"><h2>Weather outlook</h2><span className="ir-small-tag">{weatherStatus === "live" ? "OPEN-METEO" : "SAMPLE"}</span></div>
-              <div className="ir-weather-row">
-                {forecastData.daily.slice(0, 5).map((w, i) => <div className="ir-weather-day" key={w.date}><span className="ir-weather-label">{i === 0 ? "TODAY" : calendarLabel(w.date)}</span><span className="ir-weather-icon">{weatherEmoji(w.weatherCode)}</span><strong>{Math.round(w.highC)}°</strong><small>{Math.round(w.lowC)}°</small><small>{Math.round(w.rainChancePct)}% rain</small></div>)}
+              <div className="ir-weather-row" aria-label="Five day weather outlook">
+                {forecastData.daily.slice(0, 5).map((w, i) => <div className="ir-weather-day" key={w.date}><span className="ir-weather-label">{i === 0 ? "TODAY" : calendarLabel(w.date)}</span><WeatherGlyph code={w.weatherCode}/><strong>{Math.round(w.highC)}°</strong><small>{Math.round(w.lowC)}°</small><small>{Math.round(w.rainChancePct)}% rain</small></div>)}
               </div>
               <div className="ir-weather-foot"><p>{weatherStatus === "live" ? "Forecast weather · " + (forecastData.currentTemperatureC === null ? "" : "Now " + round(forecastData.currentTemperatureC) + "°C · ") + forecastData.timezone : weatherStatus === "loading" ? "Fetching current forecast. Sample values shown temporarily." : "Live forecast unavailable. Showing sample values."}</p><button type="button" onClick={() => setRefreshCounter(c => c + 1)} disabled={weatherStatus === "loading"} aria-label="Refresh weather forecast">↻ Refresh</button></div>
               {weatherError ? <p className="ir-weather-error" role="status">{weatherError}</p> : null}
@@ -207,24 +227,29 @@ export default function IrrigationWebDashboard() {
           </aside>
           <div className="ir-main-column">
             <section className="ir-panel ir-chart-panel">
-              <div className="ir-panel-heading ir-chart-heading"><div><h2>Soil moisture scenario</h2><p>Illustrative water-balance response to forecast conditions and your inputs</p></div><span className={"ir-status ir-" + statusClass}><span>●</span> {status} without irrigation</span></div>
+              <div className="ir-panel-heading ir-chart-heading"><div><h2>Soil moisture forecast</h2><p>Modeled field conditions over the next {days} days</p></div><span className={"ir-status ir-" + statusClass}><span className="ir-status-dot">●</span> {status} risk</span></div>
+              <div className="ir-chart-stat-strip">
+                <div><span>MOISTURE NOW</span><strong>{startingMoisturePct}<small>%</small></strong><em>Assumed input</em></div>
+                <div><span>MINIMUM WITHOUT WATER</span><strong>{minimum}<small>%</small></strong><em>Next {days} days</em></div>
+                <div><span>WITH IRRIGATION, DAY {Math.min(days,5)}</span><strong>{scenario.treated[Math.min(days,5)]}<small>%</small></strong><em>+{improved} points vs baseline</em></div>
+              </div>
               <div className="ir-chart-wrap"><ForecastChart baseline={scenario.baseline} treated={scenario.treated} days={days}/></div>
               <div className="ir-chart-legend"><span><i className="ir-key-blue"></i> Without irrigation</span><span><i className="ir-key-green"></i> With irrigation</span><span><i className="ir-key-amber"></i> Water stress threshold: 30%</span></div>
-              <div className="ir-chart-footer"><span>Model assumptions: 250 mm root zone · 30% illustrative stress threshold</span><strong>Without irrigation: {minimum}% minimum</strong></div>
+              <div className="ir-chart-footer"><span>Simulated soil moisture, not sensor readings. Assumed root zone: 250 mm.</span><strong>Water stress threshold: 30%</strong></div>
             </section>
             <div className="ir-bottom-grid">
               <section className="ir-panel">
                 <div className="ir-panel-heading"><h2>Irrigation estimate</h2><span className="ir-small-tag">MODEL PREVIEW</span></div>
                 <div className="ir-recommendation">
                   <span className="ir-reco-icon">↗</span>
-                  <div><span className="ir-eyebrow">ILLUSTRATIVE 3-DAY WATER BALANCE</span><div className="ir-reco-number">{scenario.estimatedNeedMm} <span>mm</span></div><strong>{scenario.estimatedNeedMm > 0 ? "Estimated application: " + scenario.estimatedVolumeLitres.toLocaleString() + " L" : "No water deficit estimated"}</strong><p>Forecast ET₀ demand: {scenario.threeDayDemandMm} mm · effective rain: {scenario.threeDayRainCreditMm} mm</p><p>Your {irrigationMm} mm irrigation trial adds <b>+{improved} modeled moisture points</b> by day 5.</p></div>
+                  <div><span className="ir-eyebrow">3-DAY WATER BALANCE ESTIMATE</span><div className="ir-reco-number">{scenario.estimatedNeedMm} <span>mm</span></div><strong>{scenario.estimatedNeedMm > 0 ? "Estimated application: " + scenario.estimatedVolumeLitres.toLocaleString() + " L" : "No water deficit estimated"}</strong><p>Forecast ET₀ demand: {scenario.threeDayDemandMm} mm · effective rain: {scenario.threeDayRainCreditMm} mm</p><p>Your {irrigationMm} mm irrigation trial adds <b>+{improved} modeled moisture points</b> by day 5.</p></div>
                 </div>
                 <div className="ir-reco-note"><strong>{firstStressDay < 0 ? "Above the illustrative stress threshold" : "Modeled stress begins " + dayName(firstStressDay)}</strong><span>{firstStressDay < 0 ? "Simulated moisture remains above 30%." : "Simulated moisture drops below 30% without irrigation. Verify actual soil conditions before acting."}</span></div>
               </section>
               <section className="ir-panel">
                 <div className="ir-panel-heading"><h2>Upcoming water stress</h2><span className="ir-small-tag">RISK MONITOR</span></div>
-                <div className="ir-stress-bars">
-                  {scenario.baseline.slice(1,8).map((value,i)=><div className="ir-stress-col" key={i}><span className="ir-stress-value">{value}%</span><div className="ir-stress-track"><div className={"ir-stress-fill " + (value<25?"critical":value<30?"warning":"healthy")} style={{height: value*1.75+"%"}}></div></div><span className="ir-stress-day">D{i+1}</span></div>)}
+                <div className="ir-stress-bars" aria-label="Seven day modeled water stress">
+                  {scenario.baseline.slice(1,8).map((value,i)=><div className="ir-stress-col" key={i}><span className="ir-stress-value">{value}%</span><div className="ir-stress-track"><div className={"ir-stress-fill " + (value<25?"critical":value<30?"warning":"healthy")} style={{height: Math.min(100, (value / 50) * 100) + "%"}}></div></div><span className="ir-stress-day">{calendarLabel(forecastData.daily[i]?.date ?? forecastData.daily[0].date)}</span></div>)}
                 </div>
                 <div className="ir-stress-footer"><span><i className="ir-key-green"></i> Healthy ≥30%</span><span><i className="ir-key-amber"></i> Warning 25–29%</span><span><i className="ir-key-red"></i> Critical &lt;25%</span></div>
               </section>

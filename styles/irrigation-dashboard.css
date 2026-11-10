@@ -126,3 +126,133 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
 .ir-pipeline-item p{color:#617e69;margin:0 0 17px;font-size:12px}
 .ir-pipeline-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:11px;border-top:1px solid #d9e8da;font-size:10px;color:#708978}
 .ir-pipeline-note{padding:0 18px 17px;margin:0;font-size:11px;color:#7d9382;line-height:1.6}
+
+
+/* Dashboard visual refinement: compact, readable agricultural operations UI. */
+.ir-site{font-family:Arial,Helvetica,system-ui,sans-serif;color:#25362d;background:#f2f4f3;font-size:14px}
+.ir-site button,.ir-site select,.ir-site input{font-family:inherit}
+.ir-topbar{background:#19382d;border-bottom:1px solid #294e3b}
+.ir-topbar-inner{min-height:68px;padding:10px clamp(16px,2.5vw,36px)}
+.ir-brand{font-family:Arial,Helvetica,system-ui,sans-serif;font-size:clamp(16px,1.45vw,22px);letter-spacing:-.55px;font-weight:500}
+.ir-brand strong{font-weight:700}
+.ir-logo{height:34px;width:34px}
+.ir-topbar-actions{gap:10px}
+.ir-top-select{border-color:#557361;background:#234638;border-radius:7px;padding:8px 11px}
+.ir-top-github{border-color:#557361;border-radius:7px;padding:10px 13px}
+.ir-shell{max-width:1540px;padding:22px clamp(15px,2.2vw,32px) 28px}
+.ir-heading{margin:0 0 18px;align-items:center;gap:16px}
+.ir-eyebrow{font-size:10px;letter-spacing:1.25px;color:#5f856b}
+.ir-heading h1{font:700 clamp(23px,2vw,29px)/1.2 Arial,Helvetica,sans-serif;letter-spacing:-.7px;margin:6px 0}
+.ir-heading p{font-size:13px;color:#67796d;line-height:1.5}
+.ir-demo-tag{background:#eaf4eb;border:1px solid #d0e4d4;border-radius:8px;color:#3a7851;font-size:11px;padding:9px 12px;text-align:left;font-weight:600;white-space:normal}
+.ir-demo-dot{width:7px;height:7px;background:#469964;margin-right:6px}
+.ir-dashboard-grid{grid-template-columns:minmax(270px,29%) minmax(0,1fr);gap:16px}
+.ir-side,.ir-main-column{gap:16px}
+.ir-panel{border:1px solid #e2e7e3;border-radius:11px;box-shadow:0 2px 8px rgba(34,55,41,.045)}
+.ir-panel-heading{padding:16px 18px 14px}
+.ir-panel-heading h2{font:700 clamp(16px,1.3vw,20px)/1.2 Arial,Helvetica,sans-serif;letter-spacing:-.35px}
+.ir-small-tag{font-size:9px;letter-spacing:.8px;color:#7f9786}
+.ir-panel-pad{padding:14px 15px 16px}
+.ir-farm-image{
+  background-image:
+  linear-gradient(90deg,rgba(12,47,27,.18),transparent 62%),
+  url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1000&q=85');
+  background-position:center,center 54%;background-size:cover;
+  height:190px;border-radius:8px;
+}
+.ir-farm-grid{display:none}
+.ir-farm-boundary{left:43%;top:29%;width:37%;height:43%;transform:skew(-16deg,-4deg);border:2px solid #fff;box-shadow:0 0 0 1px #234d35}
+.ir-map-pin{border:2px solid #fff;background:#2c79a1;width:27px;height:27px;font-size:10px}
+.ir-farm-caption{background:rgba(20,51,34,.88);font-size:11px;padding:7px 9px;border-radius:5px}
+.ir-location-dot{width:7px;height:7px;background:#d2ecaa;display:inline-block;border-radius:50%;margin-right:5px}
+.ir-field-meta{gap:14px 10px;margin-top:15px}
+.ir-field-meta small{font-size:9px;letter-spacing:.65px;color:#809184}
+.ir-field-meta strong{font-size:12px;color:#2d4435}
+.ir-assumed{font-size:10px;font-weight:400;color:#819287}
+.ir-weather-row{padding:14px 12px 11px;gap:3px}
+.ir-weather-day{gap:5px}
+.ir-weather-label{font-size:10px;color:#7b8d81;letter-spacing:.3px}
+.ir-weather-glyph{height:39px;width:44px;max-width:100%;display:block;margin:2px 0}
+.ir-weather-day strong{font-size:16px}
+.ir-weather-day small{font-size:11px}
+.ir-weather-foot{padding:8px 14px 12px}
+.ir-weather-foot p{font-size:11px}
+.ir-controls .ir-panel-pad{padding:17px 18px}
+.ir-range-label{color:#516958;font-size:12px}
+.ir-range-label strong{color:#317949;font-size:13px}
+.ir-controls input[type=range]{margin-bottom:16px;accent-color:#428b5d}
+.ir-reset{padding:9px 12px;background:#edf5ed;border-color:#d2dfd2;font-size:12px;border-radius:6px}
+.ir-chart-heading{padding:18px 21px 12px}
+.ir-chart-heading h2{font-size:clamp(18px,1.55vw,23px)}
+.ir-chart-heading p{margin-top:5px;font-size:12px;color:#75887b}
+.ir-status{border-radius:6px;padding:7px 10px;font-size:11px;white-space:nowrap}
+.ir-status-dot{font-size:9px}
+.ir-chart-stat-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:5px 19px 0;border:1px solid #ebefec;border-radius:7px;background:#fafcf9}
+.ir-chart-stat-strip>div{padding:11px 15px;display:flex;flex-direction:column;min-width:0;gap:2px}
+.ir-chart-stat-strip>div:not(:last-child){border-right:1px solid #e9eee9}
+.ir-chart-stat-strip span{font-size:9px;letter-spacing:.75px;font-weight:700;color:#819184}
+.ir-chart-stat-strip strong{font:700 clamp(21px,2vw,28px)/1.17 Arial,Helvetica,sans-serif;letter-spacing:-.5px;color:#2a6141}
+.ir-chart-stat-strip strong small{font-size:13px;font-weight:500}
+.ir-chart-stat-strip em{font-size:10px;font-style:normal;color:#819084}
+.ir-chart-wrap{padding:5px 14px 0 5px}
+.ir-chart{max-height:342px}
+.ir-chart-legend{padding:0 14px 15px;color:#617266;font-size:11px;gap:14px 22px}
+.ir-chart-footer{background:#f5f8f4;padding:13px 19px;font-size:11px;color:#6a7f6f}
+.ir-chart-footer strong{font-weight:700;color:#4c7e57}
+.ir-bottom-grid{gap:16px}
+.ir-bottom-grid .ir-panel{min-height:270px}
+.ir-recommendation{padding:20px 19px;gap:13px}
+.ir-reco-icon{height:52px;width:52px;flex-shrink:0}
+.ir-reco-number{font:700 34px/1.22 Arial,Helvetica,sans-serif;letter-spacing:-1px}
+.ir-reco-number span{font-size:15px}
+.ir-recommendation p{margin:7px 0 0;font-size:11px;line-height:1.5}
+.ir-reco-note{padding:12px 18px}
+.ir-stress-bars{padding:24px 17px 8px;height:188px;position:relative}
+.ir-stress-track{height:112px;background:linear-gradient(180deg,rgba(243,247,238,.6),transparent)}
+.ir-stress-value{color:#536f5b;font-weight:600}
+.ir-stress-day{font-size:10px}
+.ir-stress-footer{font-size:10px;padding:13px 12px}
+.ir-pipeline-panel{margin-top:16px}
+.ir-footer{margin-top:22px}
+@media(max-width:1100px){
+ .ir-dashboard-grid{grid-template-columns:minmax(240px,33%) minmax(0,1fr)}
+ .ir-bottom-grid{grid-template-columns:1fr}
+ .ir-heading p{max-width:520px}
+}
+@media(max-width:740px){
+ .ir-shell{padding:16px 13px 25px}
+ .ir-topbar-inner{padding:10px 13px}
+ .ir-heading{display:flex;align-items:flex-start;gap:10px}
+ .ir-heading h1{font-size:23px}
+ .ir-demo-tag{margin-top:1px;max-width:180px;flex-shrink:0}
+ .ir-main-column{order:0}
+ .ir-dashboard-grid{display:flex;flex-direction:column}
+ .ir-side{display:grid;grid-template-columns:1fr 1fr;gap:13px;width:100%}
+ .ir-side .ir-panel:first-child{grid-row:span 2}
+ .ir-main-column{width:100%}
+ .ir-bottom-grid{grid-template-columns:1fr 1fr}
+ .ir-chart-stat-strip{margin:5px 12px 0}
+}
+@media(max-width:600px){
+ .ir-topbar-actions{max-width:50%}
+ .ir-brand{font-size:16px}
+ .ir-heading{display:block}
+ .ir-heading h1{font-size:24px}
+ .ir-demo-tag{margin-top:10px;max-width:max-content}
+ .ir-side,.ir-bottom-grid{grid-template-columns:1fr}
+ .ir-side .ir-panel:first-child{grid-row:auto}
+ .ir-farm-image{height:195px}
+ .ir-panel-heading{padding:14px 15px}
+ .ir-chart-heading{padding:15px 15px 10px}
+ .ir-chart-stat-strip{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .ir-chart-stat-strip>div{padding:9px 8px}
+ .ir-chart-stat-strip span{font-size:8px;letter-spacing:.3px}
+ .ir-chart-stat-strip strong{font-size:19px}
+ .ir-chart-stat-strip em{font-size:9px}
+ .ir-chart-wrap{padding:8px 0 0}
+ .ir-chart-footer{padding:12px}
+ .ir-weather-glyph{width:42px}
+ .ir-weather-row{justify-content:space-around}
+ .ir-bottom-grid .ir-panel{min-height:unset}
+ .ir-top-select select{max-width:116px}
+}
