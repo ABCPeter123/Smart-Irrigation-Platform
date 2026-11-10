@@ -6,10 +6,12 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ) {
-  console.error(err);
+  console.error("Request failed:", err);
 
   const message =
-    err instanceof Error ? err.message : "Internal server error";
+    process.env.NODE_ENV === "production"
+      ? "Internal server error"
+      : err instanceof Error ? err.message : "Internal server error";
 
   res.status(500).json({
     error: message,
