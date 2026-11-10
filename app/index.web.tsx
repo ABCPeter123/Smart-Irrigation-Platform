@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPublicWeather, sampleWeather, type PublicWeather } from "../src/services/publicWeather.web";
 import { calculateScenario, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
 
@@ -39,6 +39,72 @@ function WeatherGlyph({ code }: { code: number }) {
     </svg>
   );
 }
+
+function ChevronDown() {
+  return <svg className="ir-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+
+function FarmPicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const current = FIELDS.find(item => item.id === value) ?? FIELDS[0];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onOutsidePress = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        containerRef.current?.querySelector<HTMLButtonElement>(".ir-farm-trigger")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onOutsidePress);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("pointerdown", onOutsidePress);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="ir-farm-picker" ref={containerRef}>
+      <button className="ir-farm-trigger" type="button" aria-expanded={isOpen}
+        aria-controls="ir-farm-options" onClick={() => setIsOpen(prev => !prev)}>
+        <svg className="ir-pin-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M19 10c0 5.2-7 11-7 11S5 15.2 5 10a7 7 0 1 1 14 0Z" stroke="currentColor" strokeWidth="1.8"/>
+          <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8"/>
+        </svg>
+        <span className="ir-farm-trigger-label">{current.name}</span>
+        <ChevronDown />
+      </button>
+      {isOpen ? (
+        <div className="ir-farm-menu" id="ir-farm-options" role="group" aria-label="Choose a farm">
+          <span className="ir-farm-menu-heading">SELECT FIELD</span>
+          {FIELDS.map(item => (
+            <button className={"ir-farm-option" + (item.id === value ? " is-selected" : "")}
+              type="button" key={item.id} aria-pressed={item.id === value}
+              onClick={() => { onChange(item.id); setIsOpen(false); }}>
+              <span className="ir-option-text"><strong>{item.name}</strong><small>{item.location}</small></span>
+              {item.id === value ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ForecastWindow({ days, onChange }: { days: number; onChange: (next: number) => void }) {
+  return <div className="ir-days-switch" role="group" aria-label="Forecast window">
+    <button type="button" className={days === 7 ? "is-selected" : ""} aria-pressed={days === 7}
+      onClick={() => onChange(7)}><span className="ir-days-long">7 days</span><span className="ir-days-short">7d</span></button>
+    <button type="button" className={days === 14 ? "is-selected" : ""} aria-pressed={days === 14}
+      onClick={() => onChange(14)}><span className="ir-days-long">14 days</span><span className="ir-days-short">14d</span></button>
+  </div>;
+}
+
 const dayName = (i: number) => i === 0 ? "today" : i === 1 ? "tomorrow" : "day " + (i + 1);
 const calendarLabel = (date: string) =>
   new Date(date + "T12:00:00Z").toLocaleDateString("en-CA", { weekday: "short", timeZone: "UTC" }).toUpperCase();
@@ -178,8 +244,8 @@ export default function IrrigationWebDashboard() {
         <div className="ir-topbar-inner">
           <a href="/" className="ir-brand"><BrandMark/><span>Irrigation <strong>Decision Support</strong></span></a>
           <div className="ir-topbar-actions">
-            <label className="ir-top-select"><span>⌖</span><select aria-label="Select farm" value={fieldId} onChange={e=>setFieldId(e.target.value)}>{FIELDS.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-            <label className="ir-top-select ir-days"><select aria-label="Forecast window" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={7}>7 days</option><option value={14}>14 days</option></select></label>
+            <FarmPicker value={fieldId} onChange={setFieldId} />
+            <ForecastWindow days={days} onChange={setDays} />
             <a className="ir-top-github" href="https://github.com/ABCPeter123/Smart-Irrigation-Platform" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
         </div>
@@ -207,21 +273,21 @@ export default function IrrigationWebDashboard() {
               <div className="ir-weather-row" aria-label="Five day weather outlook">
                 {forecastData.daily.slice(0, 5).map((w, i) => <div className="ir-weather-day" key={w.date}><span className="ir-weather-label">{i === 0 ? "TODAY" : calendarLabel(w.date)}</span><WeatherGlyph code={w.weatherCode}/><strong>{Math.round(w.highC)}°</strong><small>{Math.round(w.lowC)}°</small><small>{Math.round(w.rainChancePct)}% rain</small></div>)}
               </div>
-              <div className="ir-weather-foot"><p>{weatherStatus === "live" ? "Forecast weather · " + (forecastData.currentTemperatureC === null ? "" : "Now " + round(forecastData.currentTemperatureC) + "°C · ") + forecastData.timezone : weatherStatus === "loading" ? "Fetching current forecast. Sample values shown temporarily." : "Live forecast unavailable. Showing sample values."}</p><button type="button" onClick={() => setRefreshCounter(c => c + 1)} disabled={weatherStatus === "loading"} aria-label="Refresh weather forecast">↻ Refresh</button></div>
+              <div className="ir-weather-foot"><p>{weatherStatus === "live" ? "Forecast weather · " + (forecastData.currentTemperatureC === null ? "" : "Now " + round(forecastData.currentTemperatureC) + "°C · ") + forecastData.timezone : weatherStatus === "loading" ? "Fetching current forecast. Sample values shown temporarily." : "Live forecast unavailable. Showing sample values."}</p><button type="button" onClick={() => setRefreshCounter(c => c + 1)} disabled={weatherStatus === "loading"} aria-label="Refresh weather forecast"><svg className="ir-button-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.8M20 4v7h-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg><span>Refresh</span></button></div>
               {weatherError ? <p className="ir-weather-error" role="status">{weatherError}</p> : null}
             </section>
             <section className="ir-panel ir-controls">
               <div className="ir-panel-heading"><h2>Scenario controls</h2><span className="ir-small-tag">TRY IT</span></div>
               <div className="ir-panel-pad">
                 <label className="ir-range-label" htmlFor="extra-rain"><span>Additional rainfall · day 2</span><strong>{rainMm} mm</strong></label>
-                <input id="extra-rain" aria-label="Additional rainfall in millimetres" type="range" min="0" max="20" step="1" value={rainMm} onChange={e => setRainMm(Number(e.target.value))} disabled={field.environment === "greenhouse"} />
+                <input id="extra-rain" className="ir-range-input" style={{background: `linear-gradient(to right, #438961 0%, #438961 ${((rainMm - 0) / 20) * 100}%, #dce8df ${((rainMm - 0) / 20) * 100}%, #dce8df 100%)`}} aria-label="Additional rainfall in millimetres" type="range" min="0" max="20" step="1" value={rainMm} onChange={e => setRainMm(Number(e.target.value))} disabled={field.environment === "greenhouse"} />
                 {field.environment === "greenhouse" ? <p className="ir-control-tip">Outdoor rain does not reach greenhouse crops in this model.</p> : null}
                 <label className="ir-range-label" htmlFor="planned-water"><span>Planned irrigation · day 3</span><strong>{irrigationMm} mm</strong></label>
-                <input id="planned-water" aria-label="Planned irrigation in millimetres" type="range" min="0" max="25" step="1" value={irrigationMm} onChange={e => setIrrigationMm(Number(e.target.value))}/>
+                <input id="planned-water" className="ir-range-input" style={{background: `linear-gradient(to right, #438961 0%, #438961 ${((irrigationMm - 0) / 25) * 100}%, #dce8df ${((irrigationMm - 0) / 25) * 100}%, #dce8df 100%)`}} aria-label="Planned irrigation in millimetres" type="range" min="0" max="25" step="1" value={irrigationMm} onChange={e => setIrrigationMm(Number(e.target.value))}/>
                 <label className="ir-range-label" htmlFor="assumed-moisture"><span>Assumed current moisture</span><strong>{startingMoisturePct}%</strong></label>
-                <input id="assumed-moisture" aria-label="Assumed starting soil moisture percentage" type="range" min="20" max="48" step="1" value={startingMoisturePct} onChange={e => setMoistureOverrides(previous => ({ ...previous, [field.id]: Number(e.target.value) }))}/>
+                <input id="assumed-moisture" className="ir-range-input" style={{background: `linear-gradient(to right, #438961 0%, #438961 ${((startingMoisturePct - 20) / 28) * 100}%, #dce8df ${((startingMoisturePct - 20) / 28) * 100}%, #dce8df 100%)`}} aria-label="Assumed starting soil moisture percentage" type="range" min="20" max="48" step="1" value={startingMoisturePct} onChange={e => setMoistureOverrides(previous => ({ ...previous, [field.id]: Number(e.target.value) }))}/>
                 <p className="ir-control-tip">Moisture is a scenario assumption, not a sensor reading.</p>
-                <button type="button" className="ir-reset" onClick={() => { setRainMm(0); setIrrigationMm(10); setMoistureOverrides(previous => ({ ...previous, [field.id]: field.initialMoisturePct })); }}>Reset scenario ↺</button>
+                <button type="button" className="ir-reset" onClick={() => { setRainMm(0); setIrrigationMm(10); setMoistureOverrides(previous => ({ ...previous, [field.id]: field.initialMoisturePct })); }}><svg className="ir-button-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 6.4M3 4v7h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>Reset scenario</button>
               </div>
             </section>
           </aside>
