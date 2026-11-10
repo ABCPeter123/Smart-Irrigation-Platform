@@ -8,6 +8,32 @@ The platform is designed for **remote, cold-climate agriculture in Northern Cana
 
 ---
 
+## Live browser demo
+
+**Production:** https://smart-irrigation-platform-eight.vercel.app/
+
+The public website is an interactive portfolio demonstration, built from the Expo web target and deployed as a static site on Vercel.
+
+- Weather data: Open-Meteo 14-day forecasts, fetched in the visitor's browser for the selected sample location. An explicit sample fallback is shown if the weather API is unavailable.
+- Weather attribution: [Open-Meteo](https://open-meteo.com/), CC BY 4.0. The free endpoint is intended for non-commercial use subject to [Open-Meteo's terms](https://open-meteo.com/en/terms).
+- Soil moisture: **simulated**, not measured. Sample farms and initial moisture percentages are illustrative. The 250 mm root zone, rainfall efficiency and 30% stress threshold are simplified assumptions.
+- Irrigation estimate: an educational, simplified weather-based water-balance model. It is **not** the validated production Python data pipeline, does not represent a soil sensor feed, and must not be relied upon for farm operations.
+- Production Express + Prisma + PostgreSQL and the Python ETL remain in \`backend/\`. They are separate from the public static demonstration and require a provisioned database, running backend and pipeline scheduling before they can serve real site records.
+
+### Develop and verify the website
+
+\`\`\`bash
+npm ci
+npm run web
+npm run typecheck
+npm run test:scenarios
+npm run build:web
+\`\`\`
+
+Vercel uses the \`npm run build:web\` command and publishes \`dist/\`. Merging a pull request into \`main\` deploys the website automatically.
+
+---
+
 ## Overview
 
 Water management is one of the most important variables in agriculture. Too little irrigation can stress crops and reduce yield. Too much irrigation wastes water, energy, and labor.
