@@ -100,3 +100,16 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
 @media(max-width:740px){.ir-topbar-inner{min-height:66px}.ir-brand{font-size:17px}.ir-logo{width:29px;height:29px}.ir-topbar-actions{gap:6px}.ir-top-select{padding:8px}.ir-top-select select{max-width:110px;font-size:11px}.ir-top-select span,.ir-days,.ir-top-github{display:none}.ir-heading{display:block;margin-bottom:18px}.ir-demo-tag{display:inline-block;margin-top:14px;font-size:11px}.ir-dashboard-grid{grid-template-columns:1fr}.ir-side{display:grid;grid-template-columns:1fr 1fr;align-items:start}.ir-side .ir-panel:first-child{grid-row:span 2}.ir-farm-image{height:155px}.ir-main-column{order:-1}.ir-chart-heading{padding:17px 16px 7px}.ir-panel-heading{padding:15px 17px}.ir-bottom-grid{grid-template-columns:1fr 1fr}.ir-chart-legend{font-size:10px}.ir-recommendation{padding:18px 14px}.ir-reco-icon{width:44px;height:44px;font-size:21px}.ir-reco-number{font-size:30px}}
 @media(max-width:550px){.ir-heading h1{font-size:25px;letter-spacing:-1px}.ir-heading p{font-size:13px;line-height:1.6}.ir-panel-heading h2{font-size:17px}.ir-chart-heading{display:block}.ir-status{display:inline-flex;margin-top:12px}.ir-chart-legend{justify-content:flex-start;gap:9px 15px}.ir-chart-footer{padding:12px 16px}.ir-side,.ir-bottom-grid{grid-template-columns:1fr}.ir-side .ir-panel:first-child{grid-row:auto}.ir-farm-image{height:195px}.ir-chart-wrap{padding:10px 1px 0}.ir-topbar-actions{max-width:44%}.ir-top-select select{max-width:122px}.ir-bottom-grid .ir-panel{min-height:unset}.ir-site{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.ir-stress-fill{transition:none}}
+
+/* Weather provenance, live-data states and accessible scenario assumptions. */
+.ir-weather-foot{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:6px 17px 16px;min-width:0}
+.ir-weather-foot p{margin:0;font-size:11px;color:#718578;line-height:1.55;overflow-wrap:anywhere}
+.ir-weather-foot button{color:#2f7651;background:#eff7f0;border:1px solid #d2e7d5;border-radius:8px;padding:8px 9px;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.ir-weather-foot button:hover:not(:disabled){background:#dcf0df}
+.ir-weather-foot button:disabled{opacity:.55;cursor:wait}
+.ir-weather-error{margin:-4px 17px 16px;padding:10px;color:#9e6035;background:#fff6e9;border-radius:8px;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.ir-control-tip{margin:-13px 0 17px;color:#8a998b;font-size:11px;line-height:1.5}
+.ir-controls input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+.ir-demo-tag{white-space:normal;text-align:center;line-height:1.5}
+.ir-stress-col{min-width:0}
+@media(max-width:550px){.ir-weather-foot{padding:4px 16px 15px}.ir-weather-icon{font-size:24px}.ir-weather-day{gap:4px}.ir-weather-day small{font-size:10px}.ir-demo-tag{text-align:left}.ir-chart-legend span{white-space:normal}.ir-status{white-space:normal}}
