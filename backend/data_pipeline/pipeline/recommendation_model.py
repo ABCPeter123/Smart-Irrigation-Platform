@@ -113,6 +113,19 @@ class RecommendationModel:
                 input_features
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+            ON CONFLICT(site_id, recommendation_date)
+            DO UPDATE SET
+                generated_at = NOW(),
+                urgency = EXCLUDED.urgency,
+                action_label = EXCLUDED.action_label,
+                recommended_mm = EXCLUDED.recommended_mm,
+                estimated_liters = EXCLUDED.estimated_liters,
+                start_by = EXCLUDED.start_by,
+                confidence_score = EXCLUDED.confidence_score,
+                water_deficit_mm = EXCLUDED.water_deficit_mm,
+                model_version = EXCLUDED.model_version,
+                reasons = EXCLUDED.reasons,
+                input_features = EXCLUDED.input_features
             """,
             (
                 recommendation["site_id"],

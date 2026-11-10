@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "test:api": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

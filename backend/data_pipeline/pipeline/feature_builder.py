@@ -38,6 +38,7 @@ class FeatureBuilder:
             SELECT *
             FROM raw_weather_forecast_daily
             WHERE site_id = %s
+              AND forecast_date >= CURRENT_DATE
             ORDER BY forecast_date ASC
             LIMIT 1
             """,
