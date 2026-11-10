@@ -9,9 +9,9 @@ const source = fs.readFileSync("src/services/irrigationScenario.web.ts", "utf8")
 const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const exports = {};
-vm.runInNewContext(output, { exports }, { filename: "irrigationScenario.web.js" });
-const { calculateScenario, DEMO_FIELDS } = exports;
+const modelExports = {};
+vm.runInNewContext(output, { exports: modelExports }, { filename: "irrigationScenario.web.js" });
+const { calculateScenario, DEMO_FIELDS } = modelExports;
 
 const field = DEMO_FIELDS[0];
 const greenhouse = DEMO_FIELDS[1];
