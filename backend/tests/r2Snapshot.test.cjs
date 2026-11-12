@@ -1,6 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
+const { gunzipSync } = require("node:zlib");
 const {
   parseR2Snapshot, makeR2Snapshot, isFreshSnapshot, comparePublicRecords,
 } = require("../dist/services/r2Snapshot.service");
@@ -56,6 +57,19 @@ test("record parity ignores generated timestamps but rejects changed estimates",
   assert.deepEqual(diff.mismatchedSites,["demo-kitchener-tomatoes"]);
 });
 
+const sample = {
+  site: { id: record.id, name: record.name, latitude:record.latitude,
+    longitude:record.longitude,areaHa:record.areaHa,
+    cropType:record.cropType,soilType:record.soilType,
+    irrigationMethod:record.irrigationMethod },
+  history: [{ date:"2026-11-11",high:10,low:5,rain:1,chance:0,wind:8,et0:1.2 }],
+  forecast: [{ date:"2026-11-12",high:9,low:4,rain:0,chance:10,wind:9,et0:1.4 }],
+  model: { features: { site_id:record.id, feature_date:"2026-11-12",
+    soil_texture:"loam",et0_today_mm:1.4 },
+    urgency:"Low",mm:0,liters:0,deficit:0,action:"No irrigation needed",
+    reasons:["Estimated soil profile"] },
+};
+
 test("S3 writer puts and verifies only bounded daily + current snapshots", async () => {
   const original = {};
   for(const key of ["R2_ACCOUNT_ID","R2_BUCKET","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","R2_SYNC_ENABLED"]) {
@@ -93,12 +107,16 @@ test("S3 writer puts and verifies only bounded daily + current snapshots", async
   };
   try {
     const r2=require("../dist/services/r2Storage.service");
-    const output=await r2.writeDailyR2Snapshot([record]);
+    const output=await r2.writeDailyR2Snapshot([record],[sample]);
     assert.equal(calls.length,4);
     assert.deepEqual(calls.map(x=>x[0]),["put","get","put","get"]);
     assert.ok(output.archiveBytes<64*1024);
     assert.ok(output.indexBytes<64*1024);
     assert.equal(objects.size,2);
+    const day=JSON.parse(gunzipSync(objects.get(output.archiveKey).data).toString());
+    assert.equal(day.weatherSamples.length,1);
+    assert.equal(day.weatherSamples[0].features.et0_today_mm,1.4);
+    assert.equal(day.weatherSamples[0].forecast[0].date,"2026-11-12");
     const latest=JSON.parse(objects.get("irrigation/v1/current.json").data.toString());
     assert.equal(latest.records[0].id,record.id);
     assert.equal(latest.source,"r2-weather-snapshot");
@@ -121,7 +139,7 @@ test("R2 writes are disabled by default", async ()=>{
   try {
     const r2=require("../dist/services/r2Storage.service");
     assert.equal(r2.r2WriteEnabled(),false);
-    await assert.rejects(r2.writeDailyR2Snapshot([record]),/disabled/);
+    await assert.rejects(r2.writeDailyR2Snapshot([record],[sample]),/disabled/);
   } finally {
     if(previous === undefined)delete process.env.R2_SYNC_ENABLED;
     else process.env.R2_SYNC_ENABLED=previous;
