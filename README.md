@@ -1,3 +1,15 @@
+## Current demo data and location imagery
+
+The public web interface uses actual satellite raster tiles from Esri World Imagery for the approximate latitude/longitude of each of its five illustrative sites. These points are not verified real-world farm parcels. The imagery is fetched from Esri as needed when selecting a site, with attribution and a map link.
+
+The API runs a separate **weather-balance service** for the hosted demo. It fetches up to 14 past and 7 forecast days from Open-Meteo, computes an educational irrigation estimate based on the same simplified formula used in the Python implementation, and stores the result in Neon PostgreSQL. The hosted version uses **estimated soil profiles**, not real soil sensors. It cannot replace farm management decisions.
+
+The API's Vercel project has a daily cron configured at 10:00 UTC to GET `/api/cron/refresh`. That endpoint requires a **production-only, encrypted `CRON_SECRET`** of at least 32 characters. Vercel supplies the secret in the Authorization bearer header when invoking Cron. Do not place credentials in GitHub or expose the cron endpoint without this check.
+
+The original Python ETL remains in `backend/data_pipeline` for independent batch execution and validation. Stored rows indicate their own `model_version`, so the UI does not incorrectly attribute the hosted Node service's output to Python. Never show empty or outdated database records as measured field recommendations.
+
+---
+
 ## Full-stack hosting
 
 The Vercel web dashboard is deployed independently from the Express API and Python ETL.
