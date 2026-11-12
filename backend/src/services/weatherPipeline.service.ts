@@ -116,6 +116,42 @@ async function save(site:Site,history:Day[],forecast:Day[]) {
         water_holding_capacity_mm=EXCLUDED.water_holding_capacity_mm
     `;
     await tx.$executeRaw`
+      INSERT INTO site_features_daily (
+        site_id,feature_date,temperature_max_c,temperature_min_c,wind_max_kmh,
+        rainfall_today_mm,rainfall_3d_mm,rainfall_7d_mm,rainfall_14d_mm,
+        forecast_rain_24h_mm,forecast_rain_72h_mm,precipitation_probability_max_pct,
+        et0_today_mm,et0_7d_mm,crop_type,crop_coefficient,root_depth_mm,
+        soil_type,soil_texture,sand_pct,silt_pct,clay_pct,water_holding_capacity_mm,
+        infiltration_class,irrigation_method,irrigation_efficiency,area_hectares)
+      SELECT
+        p.site_id,p.feature_date,p.temperature_max_c,p.temperature_min_c,p.wind_max_kmh,
+        p.rainfall_today_mm,p.rainfall_3d_mm,p.rainfall_7d_mm,p.rainfall_14d_mm,
+        p.forecast_rain_24h_mm,p.forecast_rain_72h_mm,p.precipitation_probability_max_pct,
+        p.et0_today_mm,p.et0_7d_mm,p.crop_type,p.crop_coefficient,p.root_depth_mm,
+        p.soil_type,p.soil_texture,p.sand_pct,p.silt_pct,p.clay_pct,p.water_holding_capacity_mm,
+        p.infiltration_class,p.irrigation_method,p.irrigation_efficiency,p.area_hectares
+      FROM jsonb_populate_record(NULL::site_features_daily, ${JSON.stringify(features)}::jsonb) p
+      ON CONFLICT (site_id,feature_date) DO UPDATE SET
+        created_at=now(),temperature_max_c=EXCLUDED.temperature_max_c,
+        temperature_min_c=EXCLUDED.temperature_min_c,wind_max_kmh=EXCLUDED.wind_max_kmh,
+        rainfall_today_mm=EXCLUDED.rainfall_today_mm,rainfall_3d_mm=EXCLUDED.rainfall_3d_mm,
+        rainfall_7d_mm=EXCLUDED.rainfall_7d_mm,rainfall_14d_mm=EXCLUDED.rainfall_14d_mm,
+        forecast_rain_24h_mm=EXCLUDED.forecast_rain_24h_mm,
+        forecast_rain_72h_mm=EXCLUDED.forecast_rain_72h_mm,
+        precipitation_probability_max_pct=EXCLUDED.precipitation_probability_max_pct,
+        et0_today_mm=EXCLUDED.et0_today_mm,et0_7d_mm=EXCLUDED.et0_7d_mm,
+        crop_type=EXCLUDED.crop_type,crop_coefficient=EXCLUDED.crop_coefficient,
+        root_depth_mm=EXCLUDED.root_depth_mm,soil_type=EXCLUDED.soil_type,
+        soil_texture=EXCLUDED.soil_texture,sand_pct=EXCLUDED.sand_pct,
+        silt_pct=EXCLUDED.silt_pct,clay_pct=EXCLUDED.clay_pct,
+        water_holding_capacity_mm=EXCLUDED.water_holding_capacity_mm,
+        infiltration_class=EXCLUDED.infiltration_class,
+        irrigation_method=EXCLUDED.irrigation_method,
+        irrigation_efficiency=EXCLUDED.irrigation_efficiency,
+        area_hectares=EXCLUDED.area_hectares
+    `;
+
+    await tx.$executeRaw`
       INSERT INTO irrigation_recommendations(site_id,recommendation_date,urgency,
         action_label,recommended_mm,estimated_liters,start_by,confidence_score,
         water_deficit_mm,model_version,reasons,input_features)
