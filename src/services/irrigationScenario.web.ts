@@ -18,6 +18,8 @@ export const DEMO_FIELDS: DemoField[] = [
   { id: "north-ridge", name: "North Ridge Farm", location: "Hay River, NT", crop: "Leafy greens", areaHa: 0.9, latitude: 60.8156, longitude: -115.7999, cropCoefficient: 0.95, initialMoisturePct: 39, environment: "open-field", irrigationMethod: "sprinkler" },
   { id: "aurora", name: "Aurora Greenhouse", location: "Whitehorse, YT", crop: "Tomatoes", areaHa: 0.18, latitude: 60.7212, longitude: -135.0568, cropCoefficient: 1.05, initialMoisturePct: 35, environment: "greenhouse", irrigationMethod: "drip" },
   { id: "boreal", name: "Boreal Berry Plot", location: "Prince George, BC", crop: "Strawberries", areaHa: 0.42, latitude: 53.9171, longitude: -122.7497, cropCoefficient: 0.85, initialMoisturePct: 42, environment: "open-field", irrigationMethod: "drip" },
+  { id: "demo-kitchener-tomatoes", name: "Kitchener Tomato Plot", location: "Kitchener, ON", crop: "Tomatoes", areaHa: 1.2, latitude: 43.4516, longitude: -80.4925, cropCoefficient: 1.05, initialMoisturePct: 36, environment: "open-field", irrigationMethod: "drip" },
+  { id: "demo-waterloo-leafy-greens", name: "Waterloo Leafy Greens Field", location: "Waterloo, ON", crop: "Leafy greens", areaHa: 0.8, latitude: 43.4723, longitude: -80.5449, cropCoefficient: 0.95, initialMoisturePct: 37, environment: "open-field", irrigationMethod: "sprinkler" },
 ];
 
 /**
