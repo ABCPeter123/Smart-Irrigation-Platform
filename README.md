@@ -1,3 +1,13 @@
+## Search any location in the browser
+
+Open the field selector in the dashboard to search for a place or street address worldwide. You can also enter exact `latitude, longitude` coordinates (for example `43.4516, -80.4925`) to choose a rural site not listed by a geocoder. Search uses OpenStreetMap-derived Photon results, with an Open-Meteo geocoding fallback. Public demo geocoding has fair-use and availability limits.
+
+When you choose a location, the satellite tiles, current forecast, soil-moisture scenario, and **single-location irrigation forecast card** all switch to those coordinates. The five preset locations remain available. New locations inherit the previous crop and area *assumptions*; you can adjust them in the Field Overview. Custom searches are processed in your browser and **are not saved into Neon**.
+
+For one of the two Neon sample farms with a current model record, the forecast card shows that specific stored result. For other locations, the card transparently shows a live browser-side simplified irrigation estimate, **not** a persisted Python/Neon record. If weather retrieval fails, no live estimate is presented as a real forecast.
+
+---
+
 ## Current demo data and location imagery
 
 The public web interface uses actual satellite raster tiles from Esri World Imagery for the approximate latitude/longitude of each of its five illustrative sites. These points are not verified real-world farm parcels. The imagery is fetched from Esri as needed when selecting a site, with attribution and a map link.
