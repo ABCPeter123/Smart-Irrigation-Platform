@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
-import { refreshDemoForecasts } from "../services/weatherPipeline.service";
+import { refreshDemoForecasts, type R2WeatherSample } from "../services/weatherPipeline.service";
+import { loadNeonPublicRecords } from "../services/pipelineSnapshot.service";
+import { r2WriteEnabled, writeDailyR2Snapshot } from "../services/r2Storage.service";
 
 const router = Router();
 
@@ -22,8 +24,32 @@ router.get("/refresh", async (req, res) => {
   }
   try {
     res.set("Cache-Control", "no-store");
-    const result = await refreshDemoForecasts();
-    res.status(result.failed > 0 ? 207 : 200).json({ status: result.failed > 0 ? "partial" : "ok", ...result });
+    const samples: R2WeatherSample[] = [];
+    const result = await refreshDemoForecasts(
+      r2WriteEnabled() ? sample => samples.push(sample) : undefined,
+    );
+    let r2Sync: "disabled" | "skipped" | "verified" | "failed" = "disabled";
+    // Only the protected daily cron can write. No user request triggers an R2 PUT.
+    if (r2WriteEnabled()) {
+      if (result.failed === 0 && result.updated > 0) {
+        try {
+          const records = await loadNeonPublicRecords();
+          await writeDailyR2Snapshot(records, samples);
+          r2Sync = "verified";
+        } catch (error) {
+          r2Sync = "failed";
+          // Neon succeeded. Do not roll back already-computed recommendations.
+          console.error("Daily R2 shadow sync failed",
+            error instanceof Error ? error.name : "unknown");
+        }
+      } else {
+        r2Sync = "skipped";
+      }
+    }
+    const incomplete = result.failed > 0 || r2Sync === "failed";
+    res.status(incomplete ? 207 : 200).json({
+      status: incomplete ? "partial" : "ok", ...result, r2Sync,
+    });
   } catch (error) {
     console.error("Scheduled weather refresh failed", error instanceof Error ? error.name : "unknown");
     res.status(503).json({ status: "unavailable" });

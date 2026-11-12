@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 
-type Site = { id: string; name: string; latitude: number; longitude: number; areaHa: number; cropType: string; soilType: string; irrigationMethod: string };
-type Day = { date: string; high: number; low: number; rain: number; chance: number; wind: number; et0: number };
+export type Site = { id: string; name: string; latitude: number; longitude: number; areaHa: number; cropType: string; soilType: string; irrigationMethod: string };
+export type Day = { date: string; high: number; low: number; rain: number; chance: number; wind: number; et0: number };
 const COEFFICIENTS: Record<string,number> = { tomatoes:1.05,"leafy-greens":0.95,strawberries:0.85,corn:1.1,wheat:0.95,potatoes:1 };
 const EFFICIENCY: Record<string,number> = { drip:0.9,sprinkler:0.75,pivot:0.8,flood:0.55 };
 const SOIL: Record<string,{whc:number;sand:number;silt:number;clay:number}> = {
@@ -169,7 +169,16 @@ async function save(site:Site,history:Day[],forecast:Day[]) {
   },{timeout:20000});
 }
 
-export async function refreshDemoForecasts() {
+export type R2WeatherSample = {
+  site: Site;
+  history: Day[];
+  forecast: Day[];
+  model: ReturnType<typeof estimate>;
+};
+
+export async function refreshDemoForecasts(
+  onSiteSuccess?: (sample: R2WeatherSample) => void,
+) {
   const sites=await prisma.$queryRaw<Site[]>`
     SELECT id,name,latitude,longitude,area_hectares AS "areaHa",
       crop_type AS "cropType",soil_type AS "soilType",
@@ -182,6 +191,15 @@ export async function refreshDemoForecasts() {
       const {history,forecast}=await fetchWeather(site);
       await save(site,history,forecast);
       results.push({siteId:site.id,status:"updated"});
+      if (onSiteSuccess) {
+        try {
+          onSiteSuccess({ site, history, forecast, model: estimate(site, history, forecast) });
+        } catch (error) {
+          // Callback issues must not reclassify a successfully saved Neon record.
+          console.error("R2 archive sample collection failed", site.id,
+            error instanceof Error ? error.name : "unknown");
+        }
+      }
     }catch(error) {
       console.error("Weather refresh failed",site.id,error instanceof Error?error.message:"unknown");
       results.push({siteId:site.id,status:"failed"});
