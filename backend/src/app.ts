@@ -5,6 +5,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import healthRoutes from "./routes/health.routes";
 import publicPipelineRoutes from "./routes/publicPipeline.routes";
+import cronRoutes from "./routes/cron.routes";
 
 // Public deployments expose read-only endpoints only.
 export const app = express();
@@ -25,6 +26,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/health", healthRoutes);
 app.use("/api/public", publicPipelineRoutes);
+app.use("/api/cron", cronRoutes);
 
 if (!env.publicReadOnly) {
   // The existing mobile CRUD API stays available for local development.
