@@ -1,6 +1,7 @@
 /** On-demand place search for the public browser demo. No account or API key required.
- * Photon searches OpenStreetMap place/address data. Open-Meteo provides a fallback
- * for city and postal-code searches if the public Photon demo is unavailable.
+ * Open-Meteo provides fast worldwide city and postal-code matching.
+ * Photon supplements address search, but has a strict request deadline because
+ * its public demo server can be slow or unavailable.
  * Calls happen only after the user submits a query, not on each keystroke.
  */
 export type SearchPlace = {
@@ -32,6 +33,8 @@ export function parseCoordinates(query: string): SearchPlace | null {
   };
 }
 
+const searchCache = new Map<string, SearchPlace[]>();
+
 function readable(value: unknown): string {
   return typeof value === "string" && value.trim().length > 0 ? value.trim().slice(0, 100) : "";
 }
@@ -43,8 +46,11 @@ type PhotonFeature = {
 
 async function searchPhoton(term: string, signal?: AbortSignal): Promise<SearchPlace[]> {
   const params = new URLSearchParams({ q: term, limit: "7", lang: "en" });
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(3500)])
+    : AbortSignal.timeout(3500);
   const response = await fetch("https://photon.komoot.io/api/?" + params, {
-    signal,
+    signal: requestSignal,
     headers: { Accept: "application/json" },
   });
   if (!response.ok) throw new Error("Place search temporarily unavailable.");
@@ -93,25 +99,73 @@ async function searchOpenMeteo(term: string, signal?: AbortSignal): Promise<Sear
   });
 }
 
+function uniqueLocations(places: SearchPlace[]): SearchPlace[] {
+  const seen = new Set<string>();
+  return places.filter(place => {
+    const key = place.latitude.toFixed(4) + ":" + place.longitude.toFixed(4);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 7);
+}
+
+/**
+ * Browsers only search after explicit form submission. Place names resolve
+ * quickly through Open-Meteo; for street addresses, try the more detailed
+ * Photon search first, but never let its availability block city lookup.
+ */
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<SearchPlace[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) throw new Error("Enter a place, address, or latitude, longitude.");
   if (trimmed.length > 120) throw new Error("Search terms must be 120 characters or fewer.");
   const coordinates = parseCoordinates(trimmed);
   if (coordinates) return [coordinates];
-  let places: SearchPlace[];
-  try {
-    places = await searchPhoton(trimmed, signal);
-    if (places.length === 0) places = await searchOpenMeteo(trimmed, signal);
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    places = await searchOpenMeteo(trimmed, signal);
+
+  const cacheKey = trimmed.toLocaleLowerCase("en");
+  const saved = searchCache.get(cacheKey);
+  if (saved) return saved;
+
+  const addressLike = /\d+\s+\S+|\b(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|drive)\b/i.test(trimmed);
+  const attempts: Array<() => Promise<SearchPlace[]>> = [];
+
+  if (addressLike) attempts.push(() => searchPhoton(trimmed, signal));
+  attempts.push(() => searchOpenMeteo(trimmed, signal));
+
+  // Many users type "Tokyo Japan" instead of "Tokyo, Japan", or a street
+  // address containing a city. Try the city words if the full query misses.
+  const pieces = trimmed.split(/\s+/).filter(Boolean);
+  const variants = new Set<string>();
+  if (trimmed.includes(",")) {
+    const parts = trimmed.split(",").map(part => part.trim()).filter(Boolean);
+    if (parts[0] && !/^\d/.test(parts[0])) variants.add(parts[0]);
+    if (parts[1]) variants.add(parts[1]);
   }
-  const seen = new Set<string>();
-  return places.filter(item => {
-    const key = item.latitude.toFixed(4) + ":" + item.longitude.toFixed(4);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 7);
+  if (pieces.length > 1) variants.add(pieces.slice(0, -1).join(" "));
+  if (pieces.length > 2) variants.add(pieces[pieces.length - 1]);
+  variants.delete(trimmed);
+  for (const term of variants) {
+    if (term.length >= 2) attempts.push(() => searchOpenMeteo(term, signal));
+  }
+
+  if (!addressLike) attempts.push(() => searchPhoton(trimmed, signal));
+
+  let lastError: unknown;
+  for (const find of attempts) {
+    if (signal?.aborted) throw new Error("Search cancelled");
+    try {
+      const places = uniqueLocations(await find());
+      if (places.length) {
+        searchCache.set(cacheKey, places);
+        return places;
+      }
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+    }
+  }
+  if (lastError) {
+    throw new Error("Place search is temporarily unavailable. Try a town name or enter exact coordinates.");
+  }
+  searchCache.set(cacheKey, []);
+  return [];
 }
