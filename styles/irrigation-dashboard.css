@@ -370,3 +370,40 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
  .ir-farm-menu{right:-74px}
 }
 @media(prefers-reduced-motion:reduce){.ir-chevron,.ir-farm-trigger{transition:none}}
+
+
+/* Coordinate-derived satellite tiles. Not a photo of a verified farm parcel. */
+.ir-farm-image.ir-satellite-preview{
+  position:relative;
+  isolation:isolate;
+  background:#d3ddd5;
+  height:208px;
+  overflow:hidden;
+  border:1px solid #d5e0d6;
+}
+.ir-satellite-viewport{position:absolute;inset:0;overflow:hidden;background:#c5d5cb}
+.ir-satellite-viewport::after{content:"";pointer-events:none;position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,.20),transparent 28%,transparent 60%,rgba(0,0,0,.48));z-index:2}
+.ir-satellite-tile{position:absolute;display:block;width:256px;height:256px;
+  max-width:none;min-width:256px;object-fit:cover;pointer-events:none;user-select:none}
+.ir-satellite-center{position:absolute;z-index:3;top:50%;left:50%;
+  width:15px;height:15px;transform:translate(-50%,-50%);
+  background:#247ca2;border:3px solid #fff;border-radius:50%;
+  box-shadow:0 1px 0 5px rgba(255,255,255,.28),0 1px 12px rgba(0,0,0,.35);
+  pointer-events:none}
+.ir-satellite-preview .ir-farm-caption{z-index:5;top:9px;left:10px;bottom:auto;
+  max-width:calc(100% - 118px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:rgba(18,48,33,.88);font-size:10px}
+.ir-satellite-map-link{position:absolute;z-index:5;top:9px;right:9px;color:#fff;
+  background:rgba(18,48,33,.84);border:1px solid rgba(255,255,255,.25);padding:7px 8px;
+  text-decoration:none;border-radius:5px;font-size:10px;font-weight:700}
+.ir-satellite-map-link:hover{background:rgba(18,48,33,.96)}
+.ir-satellite-attribution{position:absolute;z-index:5;bottom:4px;left:8px;right:8px;
+  display:flex;gap:3px;flex-direction:column;color:#fff;font-size:9px;line-height:1.32;
+  text-shadow:0 1px 2px rgba(0,0,0,.85);pointer-events:none}
+.ir-satellite-attribution a{color:#fff;text-decoration:underline;text-underline-offset:2px;pointer-events:auto}
+.ir-satellite-unavailable{position:absolute;inset:0;display:grid;place-items:center;
+  padding:14px;text-align:center;font-size:12px;color:#435b49}
+.ir-pipeline-item .ir-pipeline-value{line-height:1.18}
+.ir-pipeline-item .ir-pipeline-top{align-items:center}
+@media(max-width:600px){.ir-farm-image.ir-satellite-preview{height:200px}}
