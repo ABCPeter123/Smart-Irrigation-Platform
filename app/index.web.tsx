@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchPublicWeather, sampleWeather, type PublicWeather } from "../src/services/publicWeather.web";
-import { calculateScenario, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
+import { calculateScenario, customFieldAt, CUSTOM_CROP_OPTIONS, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
+import { LocationPicker } from "../src/components/LocationPicker.web";
 import { FieldImagery } from "../src/components/FieldImagery.web";
 
 import "../styles/irrigation-dashboard.css";
@@ -41,62 +42,6 @@ function WeatherGlyph({ code }: { code: number }) {
       {snowy && <g fill="#72a5c4"><circle cx="15" cy="39" r="2"/><circle cx="25" cy="40" r="2"/><circle cx="35" cy="39" r="2"/></g>}
       {storm && <path d="M26 34l-6 7h6l-2 5 9-10h-6l2-4" fill="#e9b43d"/>}
     </svg>
-  );
-}
-
-function ChevronDown() {
-  return <svg className="ir-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-}
-
-function FarmPicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const current = FIELDS.find(item => item.id === value) ?? FIELDS[0];
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onOutsidePress = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        containerRef.current?.querySelector<HTMLButtonElement>(".ir-farm-trigger")?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", onOutsidePress);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("pointerdown", onOutsidePress);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, [isOpen]);
-
-  return (
-    <div className="ir-farm-picker" ref={containerRef}>
-      <button className="ir-farm-trigger" type="button" aria-expanded={isOpen}
-        aria-controls="ir-farm-options" onClick={() => setIsOpen(prev => !prev)}>
-        <svg className="ir-pin-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M19 10c0 5.2-7 11-7 11S5 15.2 5 10a7 7 0 1 1 14 0Z" stroke="currentColor" strokeWidth="1.8"/>
-          <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8"/>
-        </svg>
-        <span className="ir-farm-trigger-label">{current.name}</span>
-        <ChevronDown />
-      </button>
-      {isOpen ? (
-        <div className="ir-farm-menu" id="ir-farm-options" role="group" aria-label="Choose a farm">
-          <span className="ir-farm-menu-heading">SELECT FIELD</span>
-          {FIELDS.map(item => (
-            <button className={"ir-farm-option" + (item.id === value ? " is-selected" : "")}
-              type="button" key={item.id} aria-pressed={item.id === value}
-              onClick={() => { onChange(item.id); setIsOpen(false); }}>
-              <span className="ir-option-text"><strong>{item.name}</strong><small>{item.location}</small></span>
-              {item.id === value ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -174,20 +119,21 @@ function BrandMark() {
 }
 
 export default function IrrigationWebDashboard() {
-  const [fieldId, setFieldId] = useState(FIELDS[0].id);
+  const [field, setField] = useState<DemoField>(FIELDS[0]);
   const [days, setDays] = useState(7);
   const [rainMm, setRainMm] = useState(0);
   const [irrigationMm, setIrrigationMm] = useState(10);
   const [moistureOverrides, setMoistureOverrides] = useState<Record<string, number>>({});
-  const [weather, setWeather] = useState<PublicWeather | null>(null);
+  const [weather, setWeather] = useState<{ key: string; data: PublicWeather } | null>(null);
   const [weatherStatus, setWeatherStatus] = useState<"loading" | "live" | "sample">("loading");
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [pipelineRecords, setPipelineRecords] = useState<PipelinePreviewRow[]>([]);
 
-  const field: DemoField = FIELDS.find(f => f.id === fieldId) ?? FIELDS[0];
+  const weatherKey = field.latitude.toFixed(5) + "," + field.longitude.toFixed(5);
   const sample = useMemo(() => sampleWeather(), []);
-  const forecastData = weather ?? sample;
+  const forecastData = weather?.key === weatherKey ? weather.data : sample;
+  const hasLiveWeather = weatherStatus === "live" && weather?.key === weatherKey;
   const startingMoisturePct = moistureOverrides[field.id] ?? field.initialMoisturePct;
 
   useEffect(() => {
@@ -199,17 +145,17 @@ export default function IrrigationWebDashboard() {
     fetchPublicWeather(field.latitude, field.longitude, controller.signal)
       .then(data => {
         if (controller.signal.aborted) return;
-        setWeather(data);
+        setWeather({ key: weatherKey, data });
         setWeatherStatus("live");
       })
       .catch(error => {
         if (controller.signal.aborted) return;
-        setWeather(sampleWeather());
+        setWeather(null);
         setWeatherStatus("sample");
         setWeatherError(error instanceof Error ? error.message : "Weather is temporarily unavailable.");
       });
     return () => controller.abort();
-  }, [field.id, refreshCounter]);
+  }, [weatherKey, refreshCounter]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -242,14 +188,34 @@ export default function IrrigationWebDashboard() {
   const status = minimum < 25 ? "Critical" : minimum < 30 ? "Warning" : "Healthy";
   const statusClass = status.toLowerCase();
   const improved = scenario.day5LiftPct;
-  const completedPipelineRecords = pipelineRecords.filter(record => record.forecastDate && record.recommendedMm !== null && record.estimatedLitres !== null);
+  // Stored rows only belong to their own demo site. Never show all sites'
+  // historical records while the visitor is looking at another location.
+  const storedForecast = pipelineRecords.find(record =>
+    record.id === field.id &&
+    record.forecastDate === forecastData.daily[0]?.date &&
+    record.recommendedMm !== null && record.estimatedLitres !== null
+  );
+  const forecastReady = !!storedForecast || !!hasLiveWeather;
+  const displayMm = storedForecast?.recommendedMm ?? scenario.estimatedNeedMm;
+  const displayLitres = storedForecast?.estimatedLitres ?? scenario.estimatedVolumeLitres;
+  const displayDate = storedForecast?.forecastDate ?? (hasLiveWeather ? forecastData.daily[0]?.date : null);
+  const displayAction = storedForecast?.actionLabel ??
+    (scenario.estimatedNeedMm > 0 ? "Illustrative 3-day application estimate" : "No short-term model deficit estimated");
+  const displayPriority = storedForecast?.urgency ?? status;
+  const isCustomLocation = field.id.startsWith("custom-");
+
+  function chooseNewLocation(place: { latitude: number; longitude: number; label: string }) {
+    setField(previous => customFieldAt(place.latitude, place.longitude, place.label, previous));
+    setRainMm(0);
+    setIrrigationMm(10);
+  }
   return (
     <div className="ir-site">
       <header className="ir-topbar">
         <div className="ir-topbar-inner">
           <a href="/" className="ir-brand"><BrandMark/><span>Irrigation <strong>Decision Support</strong></span></a>
           <div className="ir-topbar-actions">
-            <FarmPicker value={fieldId} onChange={setFieldId} />
+            <LocationPicker selected={field} presets={FIELDS} onSelect={setField} onChooseLocation={chooseNewLocation} />
             <ForecastWindow days={days} onChange={setDays} />
             <a className="ir-top-github" href="https://github.com/ABCPeter123/Smart-Irrigation-Platform" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
@@ -267,6 +233,34 @@ export default function IrrigationWebDashboard() {
               <div className="ir-panel-pad">
                 <FieldImagery key={field.id} latitude={field.latitude} longitude={field.longitude} location={field.location} name={field.name} />
                 <div className="ir-field-meta"><div><small>LOCATION</small><strong>{field.location}</strong></div><div><small>CROP</small><strong>{field.crop}</strong></div><div><small>FIELD AREA</small><strong>{field.areaHa.toFixed(2)} ha</strong></div><div><small>STARTING MOISTURE</small><strong>{startingMoisturePct}% <span className="ir-assumed">assumed</span></strong></div></div>
+                {isCustomLocation ? (
+                  <div className="ir-custom-field-settings">
+                    <span className="ir-custom-field-heading">ASSUMED FIELD PROFILE</span>
+                    <div className="ir-crop-switch" role="group" aria-label="Crop for custom location">
+                      {CUSTOM_CROP_OPTIONS.map(option => (
+                        <button type="button" key={option.crop} className={field.crop === option.crop ? "is-selected" : ""}
+                          aria-pressed={field.crop === option.crop}
+                          onClick={() => setField(previous => ({
+                            ...previous,
+                            crop: option.crop,
+                            cropCoefficient: option.cropCoefficient,
+                            irrigationMethod: option.irrigationMethod,
+                          }))}>{option.crop}</button>
+                      ))}
+                    </div>
+                    <label className="ir-field-area-setting" htmlFor="ir-custom-area">
+                      Area (hectares)
+                      <input id="ir-custom-area" type="number" min="0.1" max="1000" step="0.1"
+                        aria-label="Assumed field area in hectares" value={field.areaHa}
+                        onChange={event => {
+                          const value = Number(event.target.value);
+                          if (Number.isFinite(value) && value >= 0.1 && value <= 1000)
+                            setField(previous => ({ ...previous, areaHa: value }));
+                        }}/>
+                    </label>
+                    <p>Crop and area are your assumptions, not data from the searched location.</p>
+                  </div>
+                ) : null}
               </div>
             </section>
             <section className="ir-panel">
@@ -323,28 +317,46 @@ export default function IrrigationWebDashboard() {
             </div>
           </div>
         </div>
-        {completedPipelineRecords.length > 0 ? (
-          <section className="ir-panel ir-pipeline-panel">
-            <div className="ir-panel-heading">
-              <div><h2>Stored irrigation forecasts</h2><p>Most recent weather-based estimates for the demonstration fields</p></div>
-              <span className="ir-small-tag">POSTGRESQL · FORECAST MODEL</span>
+        <section className="ir-panel ir-pipeline-panel" aria-live="polite">
+          <div className="ir-panel-heading">
+            <div>
+              <h2>Forecast for selected location</h2>
+              <p>{field.location}</p>
             </div>
-            <div className="ir-pipeline-grid">
-              {completedPipelineRecords.map(record => (
-                <article key={record.id} className="ir-pipeline-item">
-                  <div className="ir-pipeline-top">
-                    <strong>{record.name}</strong>
-                    <span className="ir-small-tag">{record.urgency ? record.urgency.toUpperCase() + " PRIORITY" : "ESTIMATE"}</span>
-                  </div>
-                  <div className="ir-pipeline-value">{record.recommendedMm?.toFixed(1)} mm</div>
-                  <p>{record.actionLabel ?? "Forecast-based estimate"} · {Math.round(record.estimatedLitres ?? 0).toLocaleString()} L modeled</p>
-                  <div className="ir-pipeline-meta"><span>Forecast: {record.forecastDate}</span><span>{record.dataCompletenessPct === null ? "Data quality unreported" : Math.round(record.dataCompletenessPct) + "% input availability"}</span></div>
-                </article>
-              ))}
+            <span className="ir-small-tag">{storedForecast ? "NEON · STORED MODEL" : hasLiveWeather ? "OPEN-METEO · LIVE SCENARIO" : "FORECAST STATUS"}</span>
+          </div>
+          {forecastReady ? (
+            <div className="ir-pipeline-grid ir-single-forecast">
+              <article className="ir-pipeline-item">
+                <div className="ir-pipeline-top">
+                  <strong>{field.name}</strong>
+                  <span className="ir-small-tag">{displayPriority.toUpperCase()} {storedForecast ? "PRIORITY" : "SCENARIO"}</span>
+                </div>
+                <div className="ir-pipeline-value">{displayMm.toFixed(1)} mm</div>
+                <p>{displayAction} · {Math.round(displayLitres).toLocaleString()} L estimated</p>
+                <div className="ir-pipeline-meta">
+                  <span>Forecast: {displayDate}</span>
+                  <span>{storedForecast ? "Stored weather model" : "Calculated for this location"}</span>
+                </div>
+              </article>
+              <div className="ir-forecast-context">
+                <strong>{storedForecast ? "Saved daily model result" : "Calculated from current forecast"}</strong>
+                <p>{storedForecast
+                  ? "This record belongs to the selected demo field and comes from the Neon weather-model store."
+                  : "Uses the selected coordinates, the current Open-Meteo forecast, and an assumed soil-water profile. Changes with location and field inputs."}</p>
+                <span>Weather-based estimate · No connected soil sensors</span>
+              </div>
             </div>
-            <p className="ir-pipeline-note">These stored estimates use weather forecasts and assumed soil profiles. They are separate from the interactive soil-moisture scenario and do not use live soil sensors.</p>
-          </section>
-        ) : null}
+          ) : (
+            <div className="ir-forecast-pending" role="status">
+              <strong>{weatherStatus === "loading" ? "Retrieving local weather forecast" : "Local forecast unavailable"}</strong>
+              <p>{weatherStatus === "loading"
+                ? "The forecast card will update for your selected location when weather arrives."
+                : "A forecast-based estimate can't be shown without current weather. Try Refresh in Weather outlook."}</p>
+            </div>
+          )}
+          <p className="ir-pipeline-note">Illustrative water-balance estimates only. Live weather and stored model records are identified separately, and neither represents measured soil moisture.</p>
+        </section>
         <footer className="ir-footer"><span>Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · Scenario outputs are illustrative, not agronomic advice.</span><span>Built by Peter Pu · <a href="https://github.com/ABCPeter123/Smart-Irrigation-Platform" target="_blank" rel="noreferrer">Source code ↗</a></span></footer>
       </main>
     </div>

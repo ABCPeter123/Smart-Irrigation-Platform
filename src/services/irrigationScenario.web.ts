@@ -94,3 +94,36 @@ export function calculateScenario(args: {
     day5LiftPct: round(treated[Math.min(days, 5)] - baseline[Math.min(days, 5)]),
   };
 }
+
+
+/**
+ * User-selected coordinates are browser-only demo fields. Use the current
+ * crop and field-size assumptions so changing a location doesn't silently
+ * invent actual agricultural attributes at a searched address.
+ */
+export function customFieldAt(
+  latitude: number,
+  longitude: number,
+  label: string,
+  baseline: DemoField
+): DemoField {
+  return {
+    ...baseline,
+    id: "custom-" + latitude.toFixed(5) + "-" + longitude.toFixed(5),
+    name: label.split(",")[0].trim().slice(0, 64) || "Selected location",
+    location: label.slice(0, 250),
+    latitude,
+    longitude,
+    environment: "open-field",
+  };
+}
+
+export const CUSTOM_CROP_OPTIONS: Array<{
+  crop: string;
+  cropCoefficient: number;
+  irrigationMethod: "drip" | "sprinkler";
+}> = [
+  { crop: "Tomatoes", cropCoefficient: 1.05, irrigationMethod: "drip" },
+  { crop: "Leafy greens", cropCoefficient: 0.95, irrigationMethod: "sprinkler" },
+  { crop: "Strawberries", cropCoefficient: 0.85, irrigationMethod: "drip" },
+];
