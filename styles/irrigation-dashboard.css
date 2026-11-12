@@ -407,3 +407,76 @@ html,body,#root{margin:0;min-height:100%;background:#f2f5f1}
 .ir-pipeline-item .ir-pipeline-value{line-height:1.18}
 .ir-pipeline-item .ir-pipeline-top{align-items:center}
 @media(max-width:600px){.ir-farm-image.ir-satellite-preview{height:200px}}
+
+
+/* Searchable worldwide location selection. */
+.ir-location-picker{z-index:60}
+.ir-location-menu{
+  width:min(398px,calc(100vw - 18px));
+  max-height:min(76dvh,650px);
+  padding:11px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  text-align:left;
+  scrollbar-color:#bdcdc2 #fff;
+}
+.ir-location-menu-heading{font-size:10px;font-weight:800;letter-spacing:1px;color:#647d6b;padding:6px 7px 9px}
+.ir-location-search{display:flex;align-items:center;gap:7px;width:100%}
+.ir-location-search input{
+  height:39px;flex:1;min-width:0;width:100%;
+  border:1px solid #cddcd0;border-radius:7px;
+  background:#fff;color:#263b2d;font-size:12px;padding:0 11px;
+  font-family:inherit;outline:none;
+}
+.ir-location-search input::placeholder{color:#91a096}
+.ir-location-search input:focus-visible{border-color:#438961;box-shadow:0 0 0 3px #e0ede3}
+.ir-location-search button{
+  flex:none;height:39px;padding:0 13px;background:#327b52;
+  border:1px solid #327b52;border-radius:7px;
+  color:#fff;font-size:12px;font-weight:700;cursor:pointer;
+}
+.ir-location-search button:hover{background:#23623d}
+.ir-location-search button:disabled{opacity:.6;cursor:wait}
+.ir-place-hint,.ir-place-error,.ir-place-empty{
+  margin:8px 6px 10px;font-size:11px;line-height:1.4;color:#718779
+}
+.ir-place-error{color:#af5934}
+.ir-location-results{margin-top:8px;padding:5px 0 10px;border-bottom:1px solid #dce9df}
+.ir-place-result{border-radius:7px}
+.ir-place-result strong{font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.ir-location-presets{max-height:none;margin:3px 0 0}
+.ir-location-presets .ir-farm-option{min-height:50px}
+.ir-option-check{color:#338656;font-size:17px;font-weight:700}
+.ir-geocoder-credit{padding:8px 7px 2px;margin:0;font-size:10px;color:#839689}
+.ir-geocoder-credit a{color:#477b5b;text-decoration:underline}
+.ir-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ir-custom-field-settings{margin-top:18px;padding:13px;border:1px solid #deebe0;background:#f7faf6;border-radius:9px}
+.ir-custom-field-heading{display:block;font-size:10px;font-weight:800;color:#5c7b66;letter-spacing:.7px;margin-bottom:10px}
+.ir-crop-switch{display:flex;flex-wrap:wrap;gap:6px}
+.ir-crop-switch button{border:1px solid #d4e4d7;background:#fff;color:#42634d;
+  border-radius:6px;padding:8px;font-size:11px;font-weight:600;cursor:pointer}
+.ir-crop-switch button.is-selected{border-color:#438961;background:#e0efe3;color:#235d3b}
+.ir-crop-switch button:hover{border-color:#438961}
+.ir-field-area-setting{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:12px;font-size:12px;font-weight:600;color:#42634d}
+.ir-field-area-setting input{width:90px;padding:7px 9px;background:#fff;border:1px solid #cddfd0;
+  border-radius:6px;font-size:12px;color:#263d2d}
+.ir-custom-field-settings p{font-size:10px;color:#708674;line-height:1.5;margin:10px 0 0}
+.ir-forecast-context{padding:14px;align-self:center;color:#3c6247;min-width:0}
+.ir-forecast-context strong{font-size:13px}
+.ir-forecast-context p{font-size:12px;line-height:1.6;margin:8px 0;color:#69806f}
+.ir-forecast-context span{font-size:11px;color:#7c8f80}
+.ir-single-forecast{grid-template-columns:minmax(240px,.8fr) minmax(180px,1fr);align-items:stretch}
+.ir-single-forecast .ir-pipeline-item{min-width:0}
+.ir-forecast-pending{margin:15px 18px;padding:18px;border:1px solid #e4ede6;border-radius:8px;background:#f7faf8}
+.ir-forecast-pending strong{font-size:13px;color:#46634f}
+.ir-forecast-pending p{font-size:12px;color:#738578;line-height:1.6;margin:7px 0 0}
+@media(max-width:740px){
+  .ir-location-menu{max-height:70dvh}
+  .ir-single-forecast{grid-template-columns:1fr}
+  .ir-forecast-context{padding:3px 13px 10px}
+}
+@media(max-width:420px){
+  .ir-location-menu{right:-68px;width:calc(100vw - 18px)}
+  .ir-location-menu .ir-farm-option{padding:8px 7px}
+  .ir-location-menu-heading{padding-left:4px}
+}
