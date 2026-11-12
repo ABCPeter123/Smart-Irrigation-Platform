@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPublicWeather, sampleWeather, type PublicWeather } from "../src/services/publicWeather.web";
 import { calculateScenario, DEMO_FIELDS, type DemoField } from "../src/services/irrigationScenario.web";
+import { FieldImagery } from "../src/components/FieldImagery.web";
 
 import "../styles/irrigation-dashboard.css";
 
 type PipelinePreviewRow = {
   id: string;
   name: string;
+  latitude: number;
+  longitude: number;
   urgency: string | null;
+  actionLabel: string | null;
   forecastDate: string | null;
   recommendedMm: number | null;
   estimatedLitres: number | null;
@@ -238,6 +242,7 @@ export default function IrrigationWebDashboard() {
   const status = minimum < 25 ? "Critical" : minimum < 30 ? "Warning" : "Healthy";
   const statusClass = status.toLowerCase();
   const improved = scenario.day5LiftPct;
+  const completedPipelineRecords = pipelineRecords.filter(record => record.forecastDate && record.recommendedMm !== null && record.estimatedLitres !== null);
   return (
     <div className="ir-site">
       <header className="ir-topbar">
@@ -260,11 +265,7 @@ export default function IrrigationWebDashboard() {
             <section className="ir-panel">
               <div className="ir-panel-heading"><h2>Field overview</h2><span className="ir-small-tag">01 / FIELD</span></div>
               <div className="ir-panel-pad">
-                <div className="ir-farm-image" role="img" aria-label="Illustrative farm landscape photo with a highlighted field boundary">
-                  <div className="ir-farm-grid"></div>
-                  <div className="ir-farm-boundary"><span className="ir-map-pin">●</span></div>
-                  <div className="ir-farm-caption"><span className="ir-location-dot"></span> {field.name}</div>
-                </div>
+                <FieldImagery key={field.id} latitude={field.latitude} longitude={field.longitude} location={field.location} name={field.name} />
                 <div className="ir-field-meta"><div><small>LOCATION</small><strong>{field.location}</strong></div><div><small>CROP</small><strong>{field.crop}</strong></div><div><small>FIELD AREA</small><strong>{field.areaHa.toFixed(2)} ha</strong></div><div><small>STARTING MOISTURE</small><strong>{startingMoisturePct}% <span className="ir-assumed">assumed</span></strong></div></div>
               </div>
             </section>
@@ -322,26 +323,26 @@ export default function IrrigationWebDashboard() {
             </div>
           </div>
         </div>
-        {pipelineRecords.length > 0 ? (
+        {completedPipelineRecords.length > 0 ? (
           <section className="ir-panel ir-pipeline-panel">
             <div className="ir-panel-heading">
-              <div><h2>Python data pipeline</h2><p>Latest stored model snapshots for public demonstration sites</p></div>
-              <span className="ir-small-tag">POSTGRESQL · ETL</span>
+              <div><h2>Stored irrigation forecasts</h2><p>Most recent weather-based estimates for the demonstration fields</p></div>
+              <span className="ir-small-tag">POSTGRESQL · FORECAST MODEL</span>
             </div>
             <div className="ir-pipeline-grid">
-              {pipelineRecords.map(record => (
+              {completedPipelineRecords.map(record => (
                 <article key={record.id} className="ir-pipeline-item">
                   <div className="ir-pipeline-top">
                     <strong>{record.name}</strong>
-                    <span className="ir-small-tag">{record.urgency ? record.urgency.toUpperCase() + " PRIORITY" : "PENDING"}</span>
+                    <span className="ir-small-tag">{record.urgency ? record.urgency.toUpperCase() + " PRIORITY" : "ESTIMATE"}</span>
                   </div>
-                  <div className="ir-pipeline-value">{record.recommendedMm === null ? "Pending" : record.recommendedMm.toFixed(1) + " mm"}</div>
-                  <p>{record.estimatedLitres === null ? "No estimate stored" : Math.round(record.estimatedLitres).toLocaleString() + " L modeled"}</p>
-                  <div className="ir-pipeline-meta"><span>{record.forecastDate ?? "No model date"}</span><span>{record.dataCompletenessPct === null ? "Completeness unknown" : Math.round(record.dataCompletenessPct) + "% input completeness"}</span></div>
+                  <div className="ir-pipeline-value">{record.recommendedMm?.toFixed(1)} mm</div>
+                  <p>{record.actionLabel ?? "Forecast-based estimate"} · {Math.round(record.estimatedLitres ?? 0).toLocaleString()} L modeled</p>
+                  <div className="ir-pipeline-meta"><span>Forecast: {record.forecastDate}</span><span>{record.dataCompletenessPct === null ? "Data quality unreported" : Math.round(record.dataCompletenessPct) + "% input availability"}</span></div>
                 </article>
               ))}
             </div>
-            <p className="ir-pipeline-note">Stored outputs use the Python feature-store model. They are separate from the interactive soil-moisture scenario and are not based on live sensor readings.</p>
+            <p className="ir-pipeline-note">These stored estimates use weather forecasts and assumed soil profiles. They are separate from the interactive soil-moisture scenario and do not use live soil sensors.</p>
           </section>
         ) : null}
         <footer className="ir-footer"><span>Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · Scenario outputs are illustrative, not agronomic advice.</span><span>Built by Peter Pu · <a href="https://github.com/ABCPeter123/Smart-Irrigation-Platform" target="_blank" rel="noreferrer">Source code ↗</a></span></footer>
