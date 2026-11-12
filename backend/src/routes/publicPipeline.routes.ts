@@ -74,7 +74,7 @@ router.get("/pipeline", async (_req, res) => {
 
     res.json({
       status: "ready",
-      source: "python-feature-store",
+      source: "stored-weather-models",
       records: rows.map((row) => ({
         ...row,
         // The "confidence" stored by the pipeline is input completeness.
