@@ -4,6 +4,7 @@ import {
   GetObjectCommand, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 import type { PublicPipelineRecord } from "./pipelineSnapshot.service";
+import type { R2WeatherSample } from "./weatherPipeline.service";
 import {
   MAX_ARCHIVE_BYTES, MAX_CURRENT_BYTES, R2_CURRENT_KEY,
   isFreshSnapshot, makeR2Snapshot, parseR2Snapshot,
@@ -97,17 +98,37 @@ export async function readFreshR2Current(): Promise<R2CurrentSnapshot> {
  * The index is published only AFTER the archive is read back and verified.
  * No automatic retries and no object listings in the request path.
  */
-export async function writeDailyR2Snapshot(records: PublicPipelineRecord[]): Promise<{
+export async function writeDailyR2Snapshot(
+  records: PublicPipelineRecord[], samples: R2WeatherSample[] = [],
+): Promise<{
   archiveKey: string; archiveBytes: number; indexBytes: number;
 }> {
   if (!r2WriteEnabled()) throw new Error("R2 synchronization is disabled");
   if (records.length < 1 || records.length > 20) throw new Error("R2 site count outside limits");
+  if (samples.length !== records.length ||
+      !records.every(record => samples.some(sample => sample.site.id === record.id))) {
+    throw new Error("Incomplete daily weather archive: refusing to advance R2 index");
+  }
   const now = new Date().toISOString();
   const day = now.slice(0, 10);
   const archiveKey = "irrigation/v1/live/" + day + "/snapshot.json.gz";
   const snapshot = makeR2Snapshot(records, now, archiveKey);
   const archive = gzipSync(Buffer.from(JSON.stringify({
     schemaVersion: 1, date: day, updatedAt: now, records,
+    weatherSamples: samples.map(sample => ({
+      site: sample.site,
+      history: sample.history,
+      forecast: sample.forecast,
+      features: sample.model.features,
+      estimatedRecommendation: {
+        urgency: sample.model.urgency,
+        recommendedMm: sample.model.mm,
+        estimatedLitres: sample.model.liters,
+        waterDeficitMm: sample.model.deficit,
+        actionLabel: sample.model.action,
+        reasons: sample.model.reasons,
+      },
+    })),
   })), { level: 6, mtime: 0 });
   const index = Buffer.from(JSON.stringify(snapshot));
   if (archive.byteLength > MAX_ARCHIVE_BYTES || index.byteLength > MAX_CURRENT_BYTES) {
