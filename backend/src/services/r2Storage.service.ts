@@ -129,7 +129,7 @@ export async function writeDailyR2Snapshot(
         reasons: sample.model.reasons,
       },
     })),
-  })), { level: 6, mtime: 0 });
+  })), { level: 6 });
   const index = Buffer.from(JSON.stringify(snapshot));
   if (archive.byteLength > MAX_ARCHIVE_BYTES || index.byteLength > MAX_CURRENT_BYTES) {
     throw new Error("R2 daily archive or index exceeds the fixed budget");
