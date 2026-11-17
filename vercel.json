@@ -12,5 +12,8 @@
       "source": "/:path*",
       "destination": "/"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }
