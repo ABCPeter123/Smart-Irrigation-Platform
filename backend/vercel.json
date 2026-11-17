@@ -5,5 +5,8 @@
       "path": "/api/cron/refresh",
       "schedule": "0 10 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }
